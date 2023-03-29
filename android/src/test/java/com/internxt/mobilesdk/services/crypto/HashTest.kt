@@ -17,7 +17,6 @@ internal class HashTest {
       val expectedValue = byteArrayOf(-97, -122, -48, -127, -120, 76, 125, 101, -102, 47, -22, -96, -59, 90, -48, 21, -93, -65, 79, 27, 43, 11, -126, 44, -47, 93, 108, 21, -80, -16, 10, 8)
 
       val result = SUT.sha256("test".toByteArray());
-      println(result.contentToString())
       assertTrue(expectedValue.contentEquals(result))
     }
 

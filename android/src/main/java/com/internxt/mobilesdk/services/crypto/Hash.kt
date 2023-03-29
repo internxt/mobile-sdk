@@ -10,18 +10,18 @@ class Hash {
    * Given an array of bytes, generates a SHA256 Hash in bytes
    */
   public fun sha256(input: ByteArray): ByteArray {
-    val digest = MessageDigest.getInstance("SHA-256")
+    val hasher = MessageDigest.getInstance("SHA-256")
 
-    return digest.digest(input)
+    return hasher.digest(input)
   }
 
   /**
    * Given an array of bytes, generates a SHA512 Hash in bytes
    */
   public fun sha512(input: ByteArray): ByteArray {
-    val digest = MessageDigest.getInstance("SHA-512")
+    val hasher = MessageDigest.getInstance("SHA-512")
 
-    return digest.digest(input)
+    return hasher.digest(input)
   }
 
   /**
