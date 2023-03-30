@@ -19,7 +19,7 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
   // Initialize the Mobile SDK from JS side when the app starts
   @ReactMethod
   fun init(config: ReadableMap) {
-
+    // Convert ReadableMap to HashMap, we should get an util for this
   }
 
   companion object {
