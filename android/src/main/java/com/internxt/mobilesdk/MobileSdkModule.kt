@@ -4,6 +4,9 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReadableMap
+import com.internxt.mobilesdk.config.MobileSdkConfigKey
+import com.internxt.mobilesdk.config.MobileSdkConfigLoader
 import java.security.Security
 
 class MobileSdkModule(reactContext: ReactApplicationContext) :
@@ -15,8 +18,8 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
 
   // Initialize the Mobile SDK from JS side when the app starts
   @ReactMethod
-  fun init() {
-    Security.insertProviderAt(org.spongycastle.jce.provider.BouncyCastleProvider(), 1)
+  fun init(config: ReadableMap) {
+
   }
 
   companion object {
