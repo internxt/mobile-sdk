@@ -24,7 +24,7 @@ class AES {
     InvalidAlgorithmParameterException::class,
     InvalidKeyException::class
   )
-  public fun AES256CTRDecrypt(key: ByteArray, iv: ByteArray): Cipher? {
+  fun AES256CTRDecrypt(key: ByteArray, iv: ByteArray): Cipher {
     val secretKey = SecretKeySpec(key, 0, key.size, "AES")
     val cipher: Cipher = Cipher.getInstance("AES/CTR/NoPadding")
     cipher.init(Cipher.DECRYPT_MODE, secretKey, IvParameterSpec(/* iv = */ iv))
@@ -37,10 +37,11 @@ class AES {
     InvalidAlgorithmParameterException::class,
     InvalidKeyException::class
   )
-  public fun AES256CTREncrypt(key: ByteArray, iv: ByteArray): Cipher? {
+  fun AES256CTREncrypt(key: ByteArray, iv: ByteArray): Cipher {
     val secretKey = SecretKeySpec(key, 0, key.size, "AES")
     val cipher: Cipher = Cipher.getInstance("AES/CTR/NoPadding")
     cipher.init(Cipher.ENCRYPT_MODE, secretKey, IvParameterSpec(/* iv = */ iv))
     return cipher
   }
+
 }

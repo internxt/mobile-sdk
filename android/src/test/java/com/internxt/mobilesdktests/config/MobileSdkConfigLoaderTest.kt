@@ -1,7 +1,9 @@
-package com.internxt.mobilesdk.config
+package com.internxt.mobilesdktests.config
 
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReadableMap
+import com.internxt.mobilesdk.config.MobileSdkConfigKey
+import com.internxt.mobilesdk.config.MobileSdkConfigLoader
 import com.internxt.mobilesdk.utils.ConfigValueMissing
 import junit.framework.TestCase.assertTrue
 import org.junit.jupiter.api.Test
