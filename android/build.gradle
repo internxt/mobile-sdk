@@ -61,6 +61,10 @@ android {
     targetCompatibility JavaVersion.VERSION_11
   }
 
+  testOptions {
+    unitTests.returnDefaultValues = true
+  }
+
 }
 
 
