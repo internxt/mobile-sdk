@@ -1,4 +1,3 @@
-
 buildscript {
   // Buildscript is evaluated before everything else so we can't use getExtOrDefault
   def kotlin_version = rootProject.ext.has("kotlinVersion") ? rootProject.ext.get("kotlinVersion") : project.properties["MobileSdk_kotlinVersion"]
@@ -8,11 +7,16 @@ buildscript {
     mavenCentral()
   }
 
+
+
   dependencies {
     classpath "com.android.tools.build:gradle:7.3.0"
     // noinspection DifferentKotlinGradleVersion
     classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
   }
+}
+plugins {
+  id "com.google.devtools.ksp" version "1.8.20-1.0.10"
 }
 
 def isNewArchitectureEnabled() {
@@ -69,6 +73,8 @@ android {
 
 def kotlin_version = getExtOrDefault("kotlinVersion")
 def spongycastle_version = "1.58.0.0"
+
+
 dependencies {
   // For < 0.71, this will be from the local maven repo
   // For > 0.71, this will be replaced by `com.facebook.react:react-android:$version` by react gradle plugin
@@ -77,6 +83,8 @@ dependencies {
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
   implementation "com.madgag.spongycastle:bcpkix-jdk15on:$spongycastle_version"
   implementation "com.madgag.spongycastle:bcpg-jdk15on:$spongycastle_version"
+  implementation "com.squareup.moshi:moshi-kotlin:1.14.0"
+  ksp "com.squareup.moshi:moshi-kotlin-codegen:1.14.0"
   testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
   testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
   testImplementation 'org.jetbrains.kotlin:kotlin-test'

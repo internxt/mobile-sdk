@@ -2,7 +2,7 @@ package com.internxt.mobilesdk.core
 
 import com.internxt.mobilesdk.services.crypto.AES
 import com.internxt.mobilesdk.services.crypto.Hash
-import com.internxt.mobilesdk.utils.NotSupportedEncryptMode
+import com.internxt.mobilesdk.utils.NotSupportedEncryptModeException
 import java.io.*
 import javax.crypto.CipherOutputStream
 class Decrypt {
@@ -10,11 +10,11 @@ class Decrypt {
   /**
    * Decrypts an InputStream to an OutputStream
    */
-  @Throws(NotSupportedEncryptMode::class)
-  fun decrypt(input: InputStream, output: OutputStream, config: EncryptConfig) {
+  @Throws(NotSupportedEncryptModeException::class)
+  fun decryptFromStream(input: InputStream, output: OutputStream, config: EncryptConfig) {
 
     if(config.mode != EncryptMode.AesCTRNoPadding) {
-      throw NotSupportedEncryptMode("${config.mode} is not supported" )
+      throw NotSupportedEncryptModeException("${config.mode} is not supported" )
     }
 
     // 1. Get the AES256CTR Cipher

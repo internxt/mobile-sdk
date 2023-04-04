@@ -18,7 +18,7 @@ class DecryptTest {
 
     val input = ByteArrayInputStream(byteArrayOf(-30, 23, 39, -69))
     val output = ByteArrayOutputStream()
-    SUT.decrypt(input, output, EncryptConfig(
+    SUT.decryptFromStream(input, output, EncryptConfig(
       mode = EncryptMode.AesCTRNoPadding,
       key = Hex.decodeHex("50489ff30c51d5c400161ea442a8a12d2f936df6653a9caaafb36c27dec184d4"),
       iv = Hex.decodeHex("a879556ac137bfda0cbc48c60a005e05")

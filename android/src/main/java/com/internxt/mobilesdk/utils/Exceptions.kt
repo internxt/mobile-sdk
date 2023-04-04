@@ -1,7 +1,14 @@
 package com.internxt.mobilesdk.utils
 
-class CryptoFunctionNotAvailable(message: String) : Exception(message)
+class CryptoFunctionNotAvailableException(message: String) : Exception(message)
+class ConfigValueMissingException(message: String) : Exception(message)
+class NotSupportedEncryptModeException(message: String): Exception(message)
+class InvalidMnemonicException(message: String): Exception(message)
+class InvalidArgumentException(message: String): Exception(message)
+class UrlNotReceivedFromNetworkException(): Exception()
+class EmptyFileException(message: String): Exception(message)
+class FileAccessRejectionException(message: String?) :
+  Exception(message)
+class ApiResponseException(message: String):Exception(message)
 
-class ConfigValueMissing(message: String) : Exception(message)
-
-class NotSupportedEncryptMode(message: String): Exception(message)
+class DuplicatedUpload(message: String): Exception(message)

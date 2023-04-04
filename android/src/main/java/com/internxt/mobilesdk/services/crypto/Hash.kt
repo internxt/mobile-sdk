@@ -1,7 +1,6 @@
 package com.internxt.mobilesdk.services.crypto
 
 import org.spongycastle.crypto.digests.RIPEMD160Digest
-import org.spongycastle.crypto.io.DigestInputStream
 import java.io.InputStream
 import java.security.MessageDigest
 
@@ -36,9 +35,10 @@ class Hash {
 
 
   public fun getHashFromStream(input: InputStream, hasher: MessageDigest): ByteArray {
-    val BUFFER_LENGTH = 4096
+    val BUFFER_LENGTH = 1024 * 10
     val buffer = ByteArray(BUFFER_LENGTH)
     var b: Int
+
     while (input.read(buffer, 0, BUFFER_LENGTH).also { b = it } != -1) {
       hasher.update(buffer, 0, b)
     }

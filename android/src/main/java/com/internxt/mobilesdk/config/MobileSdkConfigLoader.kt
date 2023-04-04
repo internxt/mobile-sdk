@@ -1,13 +1,16 @@
 package com.internxt.mobilesdk.config
 
-import com.internxt.mobilesdk.utils.ConfigValueMissing
+import com.internxt.mobilesdk.utils.ConfigValueMissingException
 
 enum class MobileSdkConfigKey {
   DRIVE_API_URL,
   DRIVE_NEW_API_URL,
   BRIDGE_URL,
   PHOTOS_API_URL,
-  PHOTOS_NETWORK_API_URL
+  PHOTOS_NETWORK_API_URL,
+  MAGIC_IV,
+  MAGIC_SALT,
+  BRIDGE_AUTH_BASE64
 }
 object MobileSdkConfigLoader {
   private val config: HashMap<MobileSdkConfigKey, String> = HashMap()
@@ -15,9 +18,12 @@ object MobileSdkConfigLoader {
   fun init(config: HashMap<String, String>) {
     MobileSdkConfigKey.values().forEach { it
       val key = it.name
-      val configValue = config[key] ?: throw ConfigValueMissing("$key is missing in the config provided")
+      val configValue = config[key] ?: throw ConfigValueMissingException("$key is missing in the config provided")
 
-      setConfig(it, configValue)
+      if(configValue !is String) {
+        throw ConfigValueMissingException("Found config value for $key but is not an String type ")
+      }
+      setConfig(it, configValue as String)
     }
   }
   /**
@@ -30,8 +36,8 @@ object MobileSdkConfigLoader {
   /**
    * Get a config value or throws an error if the value is missing
    */
-  @Throws(ConfigValueMissing::class)
+  @Throws(ConfigValueMissingException::class)
   fun getConfig(key: MobileSdkConfigKey): String {
-    return config[key] ?: throw ConfigValueMissing("$key is missing on the MobileSDKConfig")
+    return config[key] ?: throw ConfigValueMissingException("$key is missing on the MobileSDKConfig")
   }
 }
