@@ -1,22 +1,8 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeSdk } from './nativeSdk';
+import type { SdkConfig } from './types/sdk';
 
-const LINKING_ERROR =
-  `The package '@internxt/mobile-sdk' doesn't seem to be linked. Make sure: \n\n` +
-  Platform.select({ ios: "- You have run 'pod install'\n", default: '' }) +
-  '- You rebuilt the app after installing the package\n' +
-  '- You are not using Expo Go\n';
-
-const MobileSdk = NativeModules.MobileSdk
-  ? NativeModules.MobileSdk
-  : new Proxy(
-      {},
-      {
-        get() {
-          throw new Error(LINKING_ERROR);
-        },
-      }
-    );
-
-export function multiply(a: number, b: number): Promise<number> {
-  return MobileSdk.multiply(a, b);
+export function initSdk(config: SdkConfig) {
+  NativeSdk.initSdk(config);
 }
+
+export const core = NativeSdk.core;

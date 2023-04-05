@@ -1,8 +1,8 @@
-package com.internxt.mobilesdk.config
+package com.internxt.mobilesdktests.config
 
-import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.ReadableMap
-import com.internxt.mobilesdk.utils.ConfigValueMissing
+import com.internxt.mobilesdk.config.MobileSdkConfigKey
+import com.internxt.mobilesdk.config.MobileSdkConfigLoader
+import com.internxt.mobilesdk.utils.ConfigValueMissingException
 import junit.framework.TestCase.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -13,14 +13,14 @@ class MobileSdkConfigLoaderTest {
   fun `Should throw if a value is missing in the initial config`() {
     val config = HashMap<String, String>()
 
-    assertThrows<ConfigValueMissing> {
+    assertThrows<ConfigValueMissingException> {
       MobileSdkConfigLoader.init(config)
     }
   }
 
   @Test
   fun `Should throw if you try to access a missing value`() {
-    assertThrows<ConfigValueMissing> {
+    assertThrows<ConfigValueMissingException> {
       MobileSdkConfigLoader.getConfig(MobileSdkConfigKey.BRIDGE_URL)
     }
   }

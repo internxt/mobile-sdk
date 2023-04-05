@@ -1,9 +1,11 @@
-package com.internxt.mobilesdk.services.crypto
+package com.internxt.mobilesdktests.services.crypto
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import com.facebook.common.util.Hex;
+import com.internxt.mobilesdk.services.crypto.Hash
+import java.io.ByteArrayInputStream
 import java.util.Arrays
 import kotlin.test.assertFalse
 
@@ -20,6 +22,13 @@ internal class HashTest {
       assertTrue(expectedValue.contentEquals(result))
     }
 
+  @Test
+  fun `Should create a SHA256 hash from an input stream correctly`() {
+    val expectedValue = Hex.decodeHex("8c208b7f67da26f09bedaed7b8f5b8c073131792ff8bf7fce9290ede8798c32d")
+
+    val result = SUT.getHashFromStream(ByteArrayInputStream("thisIsAlongStringToCreateAHashFrom".toByteArray()), SUT.getSha256Hasher())
+    assertTrue(expectedValue.contentEquals(result))
+  }
     @Test
     fun `Should create a SHA512 hash for "test" string correctly`() {
 

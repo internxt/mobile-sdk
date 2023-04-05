@@ -1,6 +1,7 @@
-package com.internxt.mobilesdk.services.crypto
+package com.internxt.mobilesdktests.services.crypto
 
 import com.facebook.common.util.Hex
+import com.internxt.mobilesdk.services.crypto.KeyDerivation
 import junit.framework.TestCase.assertTrue
 import org.junit.jupiter.api.Test
 
