@@ -31,10 +31,8 @@ object FS {
         return file.delete()
       }
 
-      return false
     } catch (exception: IOException) {
       exception.printStackTrace()
-      return false
     }
 
     return false
