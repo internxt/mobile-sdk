@@ -36,6 +36,8 @@ object FS {
       exception.printStackTrace()
       return false
     }
+
+    return false
   }
 
   @Throws(FileAccessRejectionException::class)

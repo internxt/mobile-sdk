@@ -27,9 +27,10 @@ import java.util.Base64
 data class UploadFileConfig(
   val bucketId: String,
   val mnemonic:String,
-  val plainStream: InputStream,
-  val encryptedStream: OutputStream,
   val encryptedFilePath: String,
+  val iv: ByteArray,
+  val key: ByteArray,
+  val index: ByteArray,
 )
 
 data class UploadFileResult(
@@ -43,8 +44,6 @@ data class UploadFileResult(
 class Upload {
 
   private val encrypt = Encrypt()
-  private val hash = Hash()
-  private val ivSize = 32
 
   @RequiresApi(Build.VERSION_CODES.O)
   @Throws(
@@ -57,43 +56,28 @@ class Upload {
   ): UploadFileResult {
 
     // 1. Validate the mnemonic
-    val mnemonicIsValid = CryptoUtils.validateMnemonic(config.mnemonic);
-    if(!mnemonicIsValid) {
+    try {
+      CryptoUtils.validateMnemonic(config.mnemonic);
+    } catch(_: Exception) {
       throw InvalidMnemonicException("Provided mnemonic is not valid")
     }
 
-    // 2. Create index, iv and fileKey to encrypt the file
-    val index = CryptoUtils.getRandomBytes(ivSize)
-    val hexIv = CryptoUtils.bytesToHex(index).slice(0..31)
-    val iv = CryptoUtils.hexToBytes(hexIv)
 
+    val iv = config.iv
+    val index = config.index
     Logger.info("Using iv ${CryptoUtils.bytesToHex(iv)}")
     Logger.info("Using mnemonic ${config.mnemonic}")
     Logger.info("Using bucketId ${config.bucketId}")
     Logger.info("Using index ${CryptoUtils.bytesToHex(index)}")
-    val fileKey = encrypt.generateFileKey(config.mnemonic, config.bucketId, index)
 
 
-    Logger.info("Generated fileKey is ${CryptoUtils.bytesToHex(fileKey)}")
-    Logger.info("Generated iv is ${CryptoUtils.bytesToHex(iv)}")
-    // 3. Encrypt the file using AES CTR NoPadding
-    encrypt.encryptFromStream(
-      config.plainStream,
-      config.encryptedStream,
-      EncryptConfig(
-        mode = EncryptMode.AesCTRNoPadding,
-        key = fileKey,
-        iv = iv
-    ))
 
-    // 4. Check if the file has content
+    // 2. Check if the file has content
     if(FS.fileIsEmpty(config.encryptedFilePath)) {
       throw EmptyFileException("File at $config.encryptedFilePath is empty")
     }
 
-    Logger.info("Encrypted as BASE64 ${Base64.getEncoder().encodeToString(File(config.encryptedFilePath).readBytes())}")
-
-    // 5. Get the content hash
+    // 3. Get the content hash
     val fileHash = encrypt.getFileContentHash(FileInputStream(config.encryptedFilePath))
 
     Logger.info("Hash is ${CryptoUtils.bytesToHex(fileHash)}")
@@ -103,6 +87,8 @@ class Upload {
       index = 0,
       size = encryptedFileSize
     ))
+
+    // 4. Start the network upload
     val encryptedFile = File(config.encryptedFilePath)
     val startUploadResult = startNetworkUpload(
         config.bucketId,
@@ -121,6 +107,7 @@ class Upload {
       throw ApiResponseException("Response does not contain UploadId");
     }
 
+    // 5. Upload the Binary encrypted file to the storage
     uploadFileToStorage(upload.url, encryptedFile)
 
 
@@ -129,6 +116,7 @@ class Upload {
       hash = CryptoUtils.bytesToHex(fileHash)
     )
 
+    // 6. Finish the upload
     val finishedUpload = finishNetworkUpload(config.bucketId, FinishUploadPayload(
         index = CryptoUtils.bytesToHex(index),
         shards = listOf(shard)
@@ -179,7 +167,7 @@ class Upload {
         throw DuplicatedUpload(body.error)
       }
 
-      throw ApiResponseException("Finish upload not successful")
+      throw ApiResponseException("Finish upload not successful with error ${body.error}")
     }
     return finishUploadAdapter.fromJson(response.body!!.source())
   }

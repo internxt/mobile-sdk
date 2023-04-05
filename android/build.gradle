@@ -84,6 +84,7 @@ dependencies {
   implementation "com.madgag.spongycastle:bcpkix-jdk15on:$spongycastle_version"
   implementation "com.madgag.spongycastle:bcpg-jdk15on:$spongycastle_version"
   implementation "com.squareup.moshi:moshi-kotlin:1.14.0"
+  implementation "cash.z.ecc.android:kotlin-bip39:1.0.4"
   ksp "com.squareup.moshi:moshi-kotlin-codegen:1.14.0"
   testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
   testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'

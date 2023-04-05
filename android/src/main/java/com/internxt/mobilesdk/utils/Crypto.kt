@@ -2,6 +2,7 @@ package com.internxt.mobilesdk.utils
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import cash.z.ecc.android.bip39.Mnemonics
 import com.facebook.common.util.Hex
 import com.internxt.mobilesdk.services.crypto.Hash
 import com.internxt.mobilesdk.services.crypto.KeyDerivation
@@ -27,12 +28,14 @@ object CryptoUtils {
     return availableAlgorithms
   }
 
-  public fun validateMnemonic(mnemonic: String): Boolean {
-    return true
-  }
-
-  public fun isValisHex(hex: String): Boolean {
-    return hex.matches(Pattern.compile("\\p{XDigit}+").toRegex())
+  @Throws(
+    Mnemonics.InvalidWordException::class,
+    Mnemonics.WordCountException::class,
+    Mnemonics.ChecksumException::class
+  )
+  public fun validateMnemonic(mnemonic: String) {
+    val mnemonicCode = Mnemonics.MnemonicCode(mnemonic)
+    mnemonicCode.validate()
   }
 
   public fun mnemonicToSeed(mnemonic: String, password: String): ByteArray {

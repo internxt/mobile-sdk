@@ -1,5 +1,7 @@
 package com.internxt.mobilesdk
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import com.facebook.common.util.Hex
 import com.facebook.react.bridge.*
 import com.internxt.mobilesdk.config.MobileSdkConfigLoader
@@ -18,6 +20,7 @@ import java.util.concurrent.TimeUnit
 class MobileSdkModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
   private val upload = Upload()
+  private val encrypt = Encrypt()
   private val uploadThreadPool = Executors.newFixedThreadPool(2)
   override fun getName(): String {
     return NAME
@@ -36,15 +39,15 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
   }
 
 
+  @RequiresApi(Build.VERSION_CODES.O)
   @ReactMethod
   fun uploadFile(config: ReadableMap, promise: Promise) {
     try {
       val plainFilePath  = config.getString("plainFilePath") ?: throw InvalidArgumentException("Missing plainFilePath")
       val mnemonic = config.getString("mnemonic") ?: throw InvalidArgumentException("Missing mnemonic")
       val bucketId = config.getString("bucketId") ?: throw InvalidArgumentException("Missing bucketId")
+
       Logger.info("Starting file encrypt process, creating Thread")
-
-
       val runnable = Runnable {
         try {
           Logger.info("Begin of encryption")
@@ -60,12 +63,31 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
 
           Logger.info("Input stream opened")
 
+          // Generate random index, IV and fileKey
+          val index = CryptoUtils.getRandomBytes(32)
+          val hexIv = CryptoUtils.bytesToHex(index).slice(0..31)
+          val iv = CryptoUtils.hexToBytes(hexIv)
+          val fileKey = encrypt.generateFileKey(mnemonic, bucketId, index)
+
+          // 1. Encrypt from input stream to output stream
+          encrypt.encryptFromStream(
+            inputStream,
+            outputStream,
+            EncryptConfig(
+              mode = EncryptMode.AesCTRNoPadding,
+              key = fileKey,
+              iv = iv
+            ))
+
+
+          // 2. Upload the encrypted file
           val uploadResult = upload.uploadFile(UploadFileConfig(
             bucketId = bucketId,
             mnemonic = mnemonic,
-            plainStream = inputStream,
-            encryptedStream = outputStream,
-            encryptedFilePath = outputFile.path
+            encryptedFilePath = outputFile.path,
+            iv = iv,
+            key = fileKey,
+            index = index
           ))
 
           val duration = Date().time - start.time;
@@ -75,9 +97,10 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
           val hexContentHash = CryptoUtils.bytesToHex(uploadResult.hash)
 
           result.putString("fileId", uploadResult.fileId)
-          result.putString("encryptedFilePath", outputFile.path)
           result.putString("encryptedFileHash", hexContentHash)
-          
+
+          // Remove the encrypted file
+          FS.unlinkIfExists(outputFile.path)
 
           // Resolve the result to JS
           promise.resolve(result)
