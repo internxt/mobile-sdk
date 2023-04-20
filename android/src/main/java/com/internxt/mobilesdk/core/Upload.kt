@@ -45,7 +45,6 @@ class Upload {
 
   private val encrypt = Encrypt()
 
-  @RequiresApi(Build.VERSION_CODES.O)
   @Throws(
     InvalidMnemonicException::class,
     EmptyFileException::class,
@@ -74,7 +73,7 @@ class Upload {
 
     // 2. Check if the file has content
     if(FS.fileIsEmpty(config.encryptedFilePath)) {
-      throw EmptyFileException("File at $config.encryptedFilePath is empty")
+      throw EmptyFileException("File at ${config.encryptedFilePath} is empty")
     }
 
     // 3. Get the content hash

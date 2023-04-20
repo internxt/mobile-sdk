@@ -17,29 +17,46 @@ const MobileSdk = NativeModules.MobileSdk
         },
       }
     );
+
+async function uploadFile(
+  path: string,
+  mnemonic: string,
+  bucketId: string
+): Promise<{
+  encryptedFilePath: string;
+  encryptedFileHash: string;
+  fileId: string;
+}> {
+  const result = await MobileSdk.uploadFile({
+    plainFilePath: path,
+    mnemonic,
+    bucketId,
+  });
+
+  return {
+    encryptedFileHash: result.encryptedFileHash,
+    encryptedFilePath: result.encryptedFilePath,
+    fileId: result.fileId,
+  };
+}
+
+async function processPhotosItem(
+  path: string,
+  mnemonic: string,
+  bucketId: string
+) {
+  return MobileSdk.processPhotosItem({
+    plainFilePath: path,
+    mnemonic,
+    bucketId,
+  });
+}
 export const NativeSdk = {
   initSdk: (config: SdkConfig) => MobileSdk.init(config),
   core: {
-    uploadFile: async (
-      path: string,
-      mnemonic: string,
-      bucketId: string
-    ): Promise<{
-      encryptedFilePath: string;
-      encryptedFileHash: string;
-      fileId: string;
-    }> => {
-      const result = await MobileSdk.uploadFile({
-        plainFilePath: path,
-        mnemonic,
-        bucketId,
-      });
-
-      return {
-        encryptedFileHash: result.encryptedFileHash,
-        encryptedFilePath: result.encryptedFilePath,
-        fileId: result.fileId,
-      };
-    },
+    uploadFile,
+  },
+  photos: {
+    processPhotosItem,
   },
 };

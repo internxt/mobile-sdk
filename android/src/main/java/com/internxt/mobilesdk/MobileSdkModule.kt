@@ -1,27 +1,28 @@
 package com.internxt.mobilesdk
 
-import android.os.Build
-import androidx.annotation.RequiresApi
+
 import com.facebook.common.util.Hex
 import com.facebook.react.bridge.*
 import com.internxt.mobilesdk.config.MobileSdkConfigLoader
 import com.internxt.mobilesdk.core.*
 import com.internxt.mobilesdk.services.FS
+import com.internxt.mobilesdk.services.photos.PhotosItemProcessConfig
+import com.internxt.mobilesdk.services.photos.PhotosLocalSyncManager
 import com.internxt.mobilesdk.utils.CryptoUtils
 import com.internxt.mobilesdk.utils.InvalidArgumentException
 import com.internxt.mobilesdk.utils.Logger
+import com.internxt.mobilesdk.utils.Performance
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.Date
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 class MobileSdkModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
   private val upload = Upload()
   private val encrypt = Encrypt()
-  private val uploadThreadPool = Executors.newFixedThreadPool(2)
+  private val photosLocalSyncManager = PhotosLocalSyncManager()
+
   override fun getName(): String {
     return NAME
   }
@@ -39,7 +40,6 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
   }
 
 
-  @RequiresApi(Build.VERSION_CODES.O)
   @ReactMethod
   fun uploadFile(config: ReadableMap, promise: Promise) {
     try {
@@ -57,7 +57,6 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
           val outputStream = FileOutputStream(outputFile)
 
           Logger.info("Encrypt process started for file at $plainFilePath")
-
           val uri = FS.getFileUri(plainFilePath, true)
           val inputStream = reactApplicationContext.contentResolver.openInputStream(uri) ?: throw IOException("Unable to open input stream at ${uri.path}")
 
@@ -90,10 +89,10 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
             index = index
           ))
 
-          val duration = Date().time - start.time;
+          val duration = Date().time - start.time
           Logger.info("[UPLOAD_COMPLETED] Uploaded in ${duration}ms correctly with fileId ${uploadResult.fileId} and hash ${Hex.encodeHex(uploadResult.hash, false)}")
 
-          val result = Arguments.createMap();
+          val result = Arguments.createMap()
           val hexContentHash = CryptoUtils.bytesToHex(uploadResult.hash)
 
           result.putString("fileId", uploadResult.fileId)
@@ -104,6 +103,60 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
 
           // Resolve the result to JS
           promise.resolve(result)
+        } catch(e: Exception) {
+          e.printStackTrace()
+          promise.reject(e)
+        }
+      }
+      Thread(runnable).start()
+    } catch (e: Exception) {
+      e.printStackTrace()
+      promise.reject(e)
+    }
+  }
+
+  @ReactMethod
+  fun processPhotosItem(config: ReadableMap, promise: Promise) {
+    try {
+      val plainFilePath  = config.getString("plainFilePath") ?: throw InvalidArgumentException("Missing plainFilePath")
+      val mnemonic = config.getString("mnemonic") ?: throw InvalidArgumentException("Missing mnemonic")
+      val bucketId = config.getString("bucketId") ?: throw InvalidArgumentException("Missing bucketId")
+      val photosUserId = config.getString("photosUserId") ?: throw InvalidArgumentException("Missing photosUserId")
+      val deviceId = config.getString("deviceId") ?: throw InvalidArgumentException("Missing deviceId")
+      Logger.info("Starting to process Photo, creating Thread")
+      val runnable = Runnable {
+        try {
+          Logger.info("Begin of Photo process")
+          val processStart = Performance.measureTime()
+          val outputDir: File = reactApplicationContext.cacheDir
+          val previewDestination = File.createTempFile("tmp", ".jpg", outputDir)
+          val uri = FS.getFileUri(plainFilePath, true)
+          val originalSourceStream = reactApplicationContext.contentResolver.openInputStream(uri) ?: throw IOException("Unable to open preview input stream at ${uri.path}")
+          val previewSourceStream = reactApplicationContext.contentResolver.openInputStream(uri) ?: throw IOException("Unable to open input stream at ${uri.path}")
+
+          // Write here the encrypted photo result
+          val encryptedOriginalDestination = File.createTempFile("tmp_original", ".enc", outputDir)
+          val encryptedOriginalStream = FileOutputStream(encryptedOriginalDestination)
+
+          // Write here the encrypted preview result
+          val encryptedPreviewFile = File.createTempFile("tmp_preview", ".enc", outputDir)
+
+          val config = PhotosItemProcessConfig(
+            bucketId = bucketId,
+            mnemonic = mnemonic,
+            sourcePath = plainFilePath.split(":")[1],
+            originalSourceStream = originalSourceStream,
+            previewSourceStream = previewSourceStream,
+            previewDestination  = previewDestination.path,
+            encryptedPreviewDestination = encryptedPreviewFile.path,
+            encryptedOriginalDestination = encryptedOriginalDestination.path,
+            encryptedOriginalStream = encryptedOriginalStream,
+            userId = photosUserId,
+            deviceId = deviceId
+          )
+          photosLocalSyncManager.processItem(config)
+          promise.resolve(true)
+          Logger.info("Photo processing completed in ${processStart.getMs()}ms")
         } catch(e: Exception) {
           e.printStackTrace()
           promise.reject(e)

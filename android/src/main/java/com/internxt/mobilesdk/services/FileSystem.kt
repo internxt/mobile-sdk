@@ -57,6 +57,15 @@ object FS {
   fun createFile(path: String) : Boolean{
     return File(path).createNewFile()
   }
+
+  fun getFilenameFromPath(path: String): String {
+    return path.substring(path.lastIndexOf(File.separator)+1);
+  }
+
+  fun getFileTypeFromPath(path: String): String {
+    val filename = getFilenameFromPath(path)
+    return filename.substring(filename.lastIndexOf(".")+1)
+  }
   fun fileIsEmpty(path: String): Boolean {
     val file = File(path)
     try {

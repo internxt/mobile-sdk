@@ -6,3 +6,5 @@ export function initSdk(config: SdkConfig) {
 }
 
 export const core = NativeSdk.core;
+
+export const photos = NativeSdk.photos;

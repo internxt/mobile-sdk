@@ -6,7 +6,8 @@ import DocumentPicker, {
   isInProgress,
 } from 'react-native-document-picker';
 import { useEffect } from 'react';
-import { initSdk, core } from '@internxt/mobile-sdk';
+import { initSdk, core, photos } from '@internxt/mobile-sdk';
+// Just for testing, fill this to reproduce a signed in user in the demo app
 const AUTH_TOKEN = '';
 const MNEMONIC = '';
 const BUCKET_ID = '';
@@ -17,7 +18,8 @@ export default function App() {
       DRIVE_API_URL: 'EMPTY',
       DRIVE_NEW_API_URL: 'EMPTY',
       BRIDGE_URL: 'https://api.internxt.com',
-      PHOTOS_API_URL: 'EMPTY',
+      BRIDGE_AUTH_BASE64: '',
+      PHOTOS_API_URL: 'https://photos.internxt.com/api/photos',
       PHOTOS_NETWORK_API_URL: 'EMPTY',
       CRIPTO_SECRET: 'EMPTY',
       MAGIC_IV: 'EMPTY',
@@ -38,6 +40,11 @@ export default function App() {
     }
   };
 
+  const handleProcessPhoto = async (document: DocumentPickerResponse) => {
+    if (!document.fileCopyUri) throw new Error('Document picker uri not found');
+
+    await photos.processPhotosItem(document.fileCopyUri, MNEMONIC, BUCKET_ID);
+  };
   const handleEncryptFile = async (document: DocumentPickerResponse) => {
     const parts = document.name?.split('.');
 
@@ -88,6 +95,20 @@ export default function App() {
               copyTo: 'cachesDirectory',
             });
             await handleEncryptFile(pickerResult);
+          } catch (e) {
+            handleError(e);
+          }
+        }}
+      />
+      <Button
+        title="Sync Photo"
+        onPress={async () => {
+          try {
+            const pickerResult = await DocumentPicker.pickSingle({
+              presentationStyle: 'fullScreen',
+              copyTo: 'cachesDirectory',
+            });
+            await handleProcessPhoto(pickerResult);
           } catch (e) {
             handleError(e);
           }
