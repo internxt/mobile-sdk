@@ -156,6 +156,11 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
           )
           photosLocalSyncManager.processItem(config)
           promise.resolve(true)
+
+          // Cleanup
+          FS.unlinkIfExists(encryptedOriginalDestination.path)
+          FS.unlinkIfExists(encryptedPreviewFile.path)
+          
           Logger.info("Photo processing completed in ${processStart.getMs()}ms")
         } catch(e: Exception) {
           e.printStackTrace()

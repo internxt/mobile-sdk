@@ -64,7 +64,9 @@ object FS {
 
   fun getFileTypeFromPath(path: String): String {
     val filename = getFilenameFromPath(path)
-    return filename.substring(filename.lastIndexOf(".")+1)
+    val index = filename.lastIndexOf(".")
+    if(index == -1 ) throw Exception("This file does not have an extension")
+    return filename.substring(index+1)
   }
   fun fileIsEmpty(path: String): Boolean {
     val file = File(path)

@@ -14,8 +14,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class PhotosApi {
   fun createPhoto(photoPayload: CreatePhotoPayload) {
     val createPhotoPayloadAdapter = JsonUtils.moshi.adapter(CreatePhotoPayload::class.java)
-    val base = MobileSdkConfigLoader.getConfig(MobileSdkConfigKey.PHOTOS_API_URL)
-    val url = "${base}/photo/exists"
+
+    val url = getUrl("/photo/exists")
     val payload = createPhotoPayloadAdapter.toJson(photoPayload)
     Logger.info("Creating photo with payload: $payload")
     val request = Request.Builder().header("Authorization", getAuthTokenForHeader()).post(payload.toRequestBody("application/json; charset=utf-8".toMediaType())).url(url).build()
@@ -25,7 +25,10 @@ class PhotosApi {
     Logger.info("Photos creation response: ${response.body!!.string()}")
   }
 
-
+  private fun getUrl(path: String): String {
+    val base = MobileSdkConfigLoader.getConfig(MobileSdkConfigKey.PHOTOS_API_URL)
+    return "$base$path"
+  }
 
   private fun getAuthTokenForHeader(): String {
     if(MobileSdkConfigLoader.authTokens == null) throw Exception("Auth token not found")
