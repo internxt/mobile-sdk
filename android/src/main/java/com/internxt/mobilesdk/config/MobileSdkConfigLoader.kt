@@ -2,6 +2,10 @@ package com.internxt.mobilesdk.config
 
 import com.internxt.mobilesdk.utils.ConfigValueMissingException
 
+data class MobileSdkAuthTokens(
+  val accessToken: String,
+  val newToken: String
+)
 enum class MobileSdkConfigKey {
   DRIVE_API_URL,
   DRIVE_NEW_API_URL,
@@ -14,7 +18,7 @@ enum class MobileSdkConfigKey {
 }
 object MobileSdkConfigLoader {
   private val config: HashMap<MobileSdkConfigKey, String> = HashMap()
-
+  val authTokens: MobileSdkAuthTokens? = null
   fun init(config: HashMap<String, String>) {
     MobileSdkConfigKey.values().forEach { it
       val key = it.name
@@ -26,6 +30,7 @@ object MobileSdkConfigLoader {
       setConfig(it, configValue as String)
     }
   }
+
   /**
    * Sets a config value
    */
@@ -40,4 +45,5 @@ object MobileSdkConfigLoader {
   fun getConfig(key: MobileSdkConfigKey): String {
     return config[key] ?: throw ConfigValueMissingException("$key is missing on the MobileSDKConfig")
   }
+
 }
