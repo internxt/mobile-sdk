@@ -1,7 +1,7 @@
 package com.internxt.mobilesdk.services.photos
 
 import android.graphics.BitmapFactory
-import androidx.exifinterface.media.ExifInterface
+import android.media.ExifInterface
 
 import com.internxt.mobilesdk.core.*
 import com.internxt.mobilesdk.data.photos.CreatePhotoPayload
@@ -12,6 +12,9 @@ import com.internxt.mobilesdk.utils.CryptoUtils
 import com.internxt.mobilesdk.utils.Logger
 import com.internxt.mobilesdk.utils.Performance
 import java.io.*
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.time.Duration.Companion.milliseconds
@@ -27,8 +30,10 @@ data class PhotosItemProcessConfig(
   val encryptedOriginalStream: OutputStream,
   val mnemonic: String,
   val bucketId: String,
+  val photosUserId: String,
   val userId: String,
-  val deviceId: String
+  val deviceId: String,
+  val takenAtISO: String
 )
 
 data class EncryptPhotosItemResult(
@@ -55,10 +60,10 @@ class PhotosLocalSyncManager {
    * 5. Original Photo upload
    * 6. Create Photo in photos api
    */
-  fun processItem(config: PhotosItemProcessConfig) {
+  fun processItem(config: PhotosItemProcessConfig): String {
     val totalTimeMeasurer = Performance.measureTime()
     val previewTimeMeasurer = Performance.measureTime()
-    Logger.info("Processing PhotosItem at $config.source")
+    Logger.info("Processing PhotosItem at ${config.sourcePath}")
     // 1. Generate a preview for the item
     val previewBitmap = photosPreviewGenerator.generatePreview(config.previewSourceStream)
     val previewFile = photosPreviewGenerator.writeBitmapToFile(previewBitmap, config.previewDestination)
@@ -136,8 +141,6 @@ class PhotosLocalSyncManager {
     val type = FS.getFileTypeFromPath(config.sourcePath)
 
     val exif = ExifInterface(config.sourcePath)
-    val takenAt = File(config.sourcePath).lastModified()
-    val takenAtISO =  SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(Date(takenAt.milliseconds.inWholeMilliseconds))
 
     Logger.info("Exif width ${exif.getAttribute(ExifInterface.TAG_IMAGE_WIDTH)}")
     Logger.info("Exif height ${exif.getAttribute(ExifInterface.TAG_IMAGE_LENGTH)}")
@@ -149,14 +152,21 @@ class PhotosLocalSyncManager {
     val hasher = hash.getSha256Hasher()
     val contentHash = hash.getHashFromStream(FileInputStream(config.sourcePath), hash.getSha256Hasher())
 
-    hasher.update(config.userId.toByteArray())
-    hasher.update(name.toByteArray())
+    Logger.info("Content hash is ${CryptoUtils.bytesToHex(contentHash)}")
+    hasher.update(config.userId.toByteArray(Charsets.UTF_8))
+
+    Logger.info("Image name is $name")
+    hasher.update(name.toByteArray(Charsets.UTF_8))
+
+    hasher.update(config.takenAtISO.toByteArray())
     hasher.update(CryptoUtils.bytesToHex(contentHash).toByteArray())
 
     val hash = CryptoUtils.bytesToHex(hasher.digest())
+
+    Logger.info("Photo hash $hash")
     val createPhotoPayload = CreatePhotoPayload(
       name = name,
-      userId = config.userId,
+      userId = config.photosUserId,
       deviceId = config.deviceId,
       fileId = uploadOriginalResult.fileId,
       width = options.outWidth,
@@ -166,13 +176,15 @@ class PhotosLocalSyncManager {
       type = type,
       hash = hash,
       networkBucketId = config.bucketId,
-      takenAt = takenAtISO,
+      takenAt = config.takenAtISO,
       previews = listOf(previewPayload),
       previewId = uploadPreviewResult.fileId
     )
-    photosApi.createPhoto(createPhotoPayload)
+    val result = photosApi.createPhoto(createPhotoPayload)
 
     Logger.info("Photo item uploaded and created in ${totalTimeMeasurer.getMs()}ms")
+
+    return result
   }
 
   private fun encryptPhotosItem(

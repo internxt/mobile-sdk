@@ -1,42 +1,59 @@
 package com.internxt.mobilesdk
 
 
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.work.*
 import com.facebook.common.util.Hex
 import com.facebook.react.bridge.*
+import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.internxt.mobilesdk.config.MobileSdkAuthTokens
 import com.internxt.mobilesdk.config.MobileSdkConfigLoader
 import com.internxt.mobilesdk.core.*
 import com.internxt.mobilesdk.services.FS
-import com.internxt.mobilesdk.services.photos.PhotosItemProcessConfig
-import com.internxt.mobilesdk.services.photos.PhotosLocalSyncManager
+import com.internxt.mobilesdk.services.photos.PhotosProcessingWorker
 import com.internxt.mobilesdk.utils.CryptoUtils
 import com.internxt.mobilesdk.utils.InvalidArgumentException
 import com.internxt.mobilesdk.utils.Logger
-import com.internxt.mobilesdk.utils.Performance
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.util.Date
+import java.util.*
+import java.util.concurrent.Executors
 
-class MobileSdkModule(reactContext: ReactApplicationContext) :
+
+class MobileSdkModule(val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
   private val upload = Upload()
   private val encrypt = Encrypt()
-  private val photosLocalSyncManager = PhotosLocalSyncManager()
-
+  private val photosEnqueuer = Executors.newFixedThreadPool(3)
+  private var scheduledPhotosToProcess = 0
+  private var processedPhotos = 0
   override fun getName(): String {
     return NAME
   }
 
   // Initialize the Mobile SDK from JS side when the app starts
   @ReactMethod
-  fun init(config: ReadableMap) {
-    val mobileSdkConfig = HashMap<String, String>()
-    config.toHashMap().forEach{
-      mobileSdkConfig[it.key] = it.value as String
-    }
+  fun init(config: ReadableMap, promise: Promise) {
+
     // Convert ReadableMap to HashMap, we should get an util for this
-    MobileSdkConfigLoader.init(mobileSdkConfig)
-    Logger.info("Internxt Mobile SDK initialized correctly")
+    try {
+      val mobileSdkConfig = HashMap<String, String>()
+      config.toHashMap().forEach{
+        mobileSdkConfig[it.key] = it.value as String
+      }
+      MobileSdkConfigLoader.init(mobileSdkConfig)
+      Logger.info("Internxt Mobile SDK initialized correctly")
+      promise.resolve(true)
+    } catch (exception: Exception) {
+      promise.reject(exception)
+    }
+
   }
 
 
@@ -116,61 +133,88 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun setAuthTokens(config: ReadableMap, promise: Promise) {
+    try {
+      val accessToken  = config.getString("accessToken") ?: throw InvalidArgumentException("Missing accessToken")
+      val newToken  = config.getString("newToken") ?: throw InvalidArgumentException("Missing newToken")
+      MobileSdkConfigLoader.authTokens = MobileSdkAuthTokens(
+        accessToken = accessToken,
+        newToken = newToken
+      )
+      promise.resolve(true)
+    } catch (exception: Exception) {
+      promise.reject(exception)
+    }
+  }
+  @ReactMethod
   fun processPhotosItem(config: ReadableMap, promise: Promise) {
     try {
+      // Resolve fast, we are going to enqueue the work request
+      promise.resolve(true)
+      /**
+       * We use this from JS since when we retrieve the EXIF data from the image
+       * the times are not equal to the ones retrieved via media resolver, so
+       * we are going to get the JS value right now which is retrieved via
+       * expo-media-library media resolver
+       */
+      val photosItemTakenAtISO  = config.getString("photosItemTakenAtISO") ?: throw InvalidArgumentException("Missing photosItemTakenAtISO")
       val plainFilePath  = config.getString("plainFilePath") ?: throw InvalidArgumentException("Missing plainFilePath")
       val mnemonic = config.getString("mnemonic") ?: throw InvalidArgumentException("Missing mnemonic")
       val bucketId = config.getString("bucketId") ?: throw InvalidArgumentException("Missing bucketId")
       val photosUserId = config.getString("photosUserId") ?: throw InvalidArgumentException("Missing photosUserId")
+      val userId = config.getString("userId") ?: throw InvalidArgumentException("Missing userId")
       val deviceId = config.getString("deviceId") ?: throw InvalidArgumentException("Missing deviceId")
-      Logger.info("Starting to process Photo, creating Thread")
-      val runnable = Runnable {
-        try {
-          Logger.info("Begin of Photo process")
-          val processStart = Performance.measureTime()
-          val outputDir: File = reactApplicationContext.cacheDir
-          val previewDestination = File.createTempFile("tmp", ".jpg", outputDir)
-          val uri = FS.getFileUri(plainFilePath, true)
-          val originalSourceStream = reactApplicationContext.contentResolver.openInputStream(uri) ?: throw IOException("Unable to open preview input stream at ${uri.path}")
-          val previewSourceStream = reactApplicationContext.contentResolver.openInputStream(uri) ?: throw IOException("Unable to open input stream at ${uri.path}")
+      Logger.info("Scheduling photo processing")
 
-          // Write here the encrypted photo result
-          val encryptedOriginalDestination = File.createTempFile("tmp_original", ".enc", outputDir)
-          val encryptedOriginalStream = FileOutputStream(encryptedOriginalDestination)
 
-          // Write here the encrypted preview result
-          val encryptedPreviewFile = File.createTempFile("tmp_preview", ".enc", outputDir)
+      photosEnqueuer.execute {
+        val events =
+          reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
 
-          val config = PhotosItemProcessConfig(
-            bucketId = bucketId,
-            mnemonic = mnemonic,
-            sourcePath = plainFilePath.split(":")[1],
-            originalSourceStream = originalSourceStream,
-            previewSourceStream = previewSourceStream,
-            previewDestination  = previewDestination.path,
-            encryptedPreviewDestination = encryptedPreviewFile.path,
-            encryptedOriginalDestination = encryptedOriginalDestination.path,
-            encryptedOriginalStream = encryptedOriginalStream,
-            userId = photosUserId,
-            deviceId = deviceId
-          )
-          photosLocalSyncManager.processItem(config)
-          promise.resolve(true)
+        val requestBuilder = OneTimeWorkRequestBuilder<PhotosProcessingWorker>()
 
-          // Cleanup
-          FS.unlinkIfExists(encryptedOriginalDestination.path)
-          FS.unlinkIfExists(encryptedPreviewFile.path)
-          
-          Logger.info("Photo processing completed in ${processStart.getMs()}ms")
-        } catch(e: Exception) {
-          e.printStackTrace()
-          promise.reject(e)
+        val data = Data.Builder()
+        data.putString("bucketId", bucketId)
+        data.putString("plainFilePath", plainFilePath)
+        data.putString("mnemonic", mnemonic)
+        data.putString("userId", userId)
+        data.putString("photosUserId", photosUserId)
+        data.putString("deviceId", deviceId)
+        data.putString("takenAtISO", photosItemTakenAtISO)
+
+        requestBuilder.setInputData(data.build())
+        requestBuilder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+
+
+        val request = requestBuilder.build()
+        val workManager = WorkManager
+          .getInstance(reactContext)
+
+        GlobalScope.launch(Dispatchers.Main) {
+          workManager.getWorkInfoByIdLiveData(request.id).observeForever {
+            val workInfo = it
+            val result = workInfo.outputData.getString("result")
+            Logger.info("Received live data event ${workInfo.state}")
+            if (workInfo?.state == WorkInfo.State.SUCCEEDED && result !== null) {
+              processedPhotos += 1
+              scheduledPhotosToProcess -= 1
+              val payload = Arguments.createMap()
+              payload.putString("result", result)
+              events.emit("onPhotoProcessed", payload)
+              Logger.info("$processedPhotos photos processed, $scheduledPhotosToProcess pending")
+            }
+          }
         }
+
+        workManager.enqueue(request)
+        scheduledPhotosToProcess += 1
+        Logger.info("$scheduledPhotosToProcess scheduled photos for processing")
       }
-      Thread(runnable).start()
+
+
     } catch (e: Exception) {
       e.printStackTrace()
-      promise.reject(e)
+     // To late to reject, we only enqueue the job
     }
   }
 
@@ -178,4 +222,9 @@ class MobileSdkModule(reactContext: ReactApplicationContext) :
   companion object {
     const val NAME = "MobileSdk"
   }
+}
+
+class CustomLifecycleOwner(val activity: AppCompatActivity) : LifecycleOwner {
+
+  override fun getLifecycle(): Lifecycle = activity.lifecycle
 }

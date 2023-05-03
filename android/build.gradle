@@ -73,12 +73,17 @@ android {
 
 def kotlin_version = getExtOrDefault("kotlinVersion")
 def spongycastle_version = "1.58.0.0"
-
+def work_version = "2.8.0"
 
 dependencies {
+
+
+
   // For < 0.71, this will be from the local maven repo
   // For > 0.71, this will be replaced by `com.facebook.react:react-android:$version` by react gradle plugin
   //noinspection GradleDynamicVersion
+  implementation("androidx.work:work-runtime:$work_version")
+  implementation("androidx.work:work-runtime-ktx:$work_version")
   implementation 'com.facebook.react:react-native:0.70.0'
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
   implementation "com.madgag.spongycastle:bcpkix-jdk15on:$spongycastle_version"

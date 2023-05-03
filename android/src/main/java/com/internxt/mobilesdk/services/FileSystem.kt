@@ -59,11 +59,13 @@ object FS {
   }
 
   fun getFilenameFromPath(path: String): String {
-    return path.substring(path.lastIndexOf(File.separator)+1);
+    val name = path.substring(path.lastIndexOf(File.separator));
+    val index = name.lastIndexOf(".")
+    return name.substring(1, index)
   }
 
   fun getFileTypeFromPath(path: String): String {
-    val filename = getFilenameFromPath(path)
+    val filename = path.substring(path.lastIndexOf(File.separator));
     val index = filename.lastIndexOf(".")
     if(index == -1 ) throw Exception("This file does not have an extension")
     return filename.substring(index+1)

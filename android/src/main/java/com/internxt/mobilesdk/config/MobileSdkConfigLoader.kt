@@ -18,7 +18,7 @@ enum class MobileSdkConfigKey {
 }
 object MobileSdkConfigLoader {
   private val config: HashMap<MobileSdkConfigKey, String> = HashMap()
-  val authTokens: MobileSdkAuthTokens? = null
+  var authTokens: MobileSdkAuthTokens? = null
   fun init(config: HashMap<String, String>) {
     MobileSdkConfigKey.values().forEach { it
       val key = it.name

@@ -1,4 +1,4 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, Platform, DeviceEventEmitter } from 'react-native';
 import type { SdkConfig } from './types/sdk';
 
 const LINKING_ERROR =
@@ -43,20 +43,38 @@ async function uploadFile(
 async function processPhotosItem(
   path: string,
   mnemonic: string,
-  bucketId: string
+  bucketId: string,
+  photosUserId: string,
+  deviceId: string,
+  userId: string,
+  takenAtISO: string
 ) {
   return MobileSdk.processPhotosItem({
     plainFilePath: path,
     mnemonic,
     bucketId,
+    photosUserId,
+    userId,
+    deviceId,
+    photosItemTakenAtISO: takenAtISO,
   });
 }
 export const NativeSdk = {
-  initSdk: (config: SdkConfig) => MobileSdk.init(config),
+  initSdk: async (config: SdkConfig) => MobileSdk.init(config),
+  setAuthTokens: async (config: { accessToken: string; newToken: string }) =>
+    MobileSdk.setAuthTokens(config),
   core: {
     uploadFile,
   },
   photos: {
     processPhotosItem,
+    onPhotoSynced: (callback: (data: any) => void) => {
+      const subscription = DeviceEventEmitter.addListener(
+        'onPhotoProcessed',
+        callback
+      );
+
+      return subscription.remove;
+    },
   },
 };

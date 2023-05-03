@@ -6,8 +6,6 @@ import android.graphics.BitmapFactory
 import android.media.ThumbnailUtils
 import android.util.Size
 import androidx.core.os.CancellationSignal
-import com.bumptech.glide.Glide
-import com.bumptech.glide.request.RequestOptions
 import com.internxt.mobilesdk.utils.Logger
 import java.io.*
 
