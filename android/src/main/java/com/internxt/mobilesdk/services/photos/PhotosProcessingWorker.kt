@@ -15,11 +15,11 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 class PhotosProcessingWorker(private val context: Context, private val workerParams: WorkerParameters):
-  CoroutineWorker(context, workerParams) {
+  Worker(context, workerParams) {
   private val notificationManager = context.getSystemService(NotificationManager::class.java)
 
   private val photosLocalSyncManager = PhotosLocalSyncManager()
-  override suspend fun doWork(): Result {
+  override fun doWork(): Result {
 
     val bucketId = workerParams.inputData.getString("bucketId") ?: throw Exception("Missing bucketId")
     val plainFilePath = workerParams.inputData.getString("plainFilePath") ?: throw Exception("Missing plainFilePath")
