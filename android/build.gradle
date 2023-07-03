@@ -84,7 +84,7 @@ dependencies {
   //noinspection GradleDynamicVersion
   implementation("androidx.work:work-runtime:$work_version")
   implementation("androidx.work:work-runtime-ktx:$work_version")
-  implementation 'com.facebook.react:react-native:0.70.0'
+  implementation 'com.facebook.react:react-native:+'
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
   implementation "com.madgag.spongycastle:bcpkix-jdk15on:$spongycastle_version"
   implementation "com.madgag.spongycastle:bcpg-jdk15on:$spongycastle_version"

@@ -15,3 +15,5 @@ export async function setAuthTokens(config: {
 export const core = NativeSdk.core;
 
 export const photos = NativeSdk.photos;
+
+export const fs = NativeSdk.fs;

@@ -1,10 +1,17 @@
 package com.internxt.mobilesdk.services
+import android.content.ContentResolver
+import android.content.ContentValues
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.webkit.MimeTypeMap
+import com.facebook.react.bridge.ReactApplicationContext
 import com.internxt.mobilesdk.utils.FileAccessRejectionException
-import java.io.BufferedReader
-import java.io.File
-import java.io.FileReader
-import java.io.IOException
+import java.io.*
+import com.internxt.mobilesdk.utils.Logger
+import kotlin.io.path.Path
+
 
 // This class is called FS to avoid naming conflicts with Java FileSystem class
 object FS {
@@ -83,5 +90,62 @@ object FS {
       e.printStackTrace()
       return true
     }
+  }
+
+
+  @Throws(NoSuchFileException::class, FileAlreadyExistsException::class, IOException::class)
+  fun saveFileToDownloadsDirectory(context: ReactApplicationContext, originalFilePath: String) {
+    val filename =  originalFilePath.substring(originalFilePath.lastIndexOf(File.separator));
+    val fileInputStream: InputStream =
+      context.contentResolver.openInputStream(getFileUri(originalFilePath, true))
+        ?: throw Exception("Cannot open Input stream at path $originalFilePath")
+
+
+    if (false && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+
+      val contentValues = ContentValues();
+
+      contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
+      val mimeType = getMimeType(context.contentResolver, originalFilePath)
+      Logger.info("Mime type")
+      if (mimeType != null) {
+        Logger.info(mimeType)
+      } else {
+        Logger.info("No mime")
+      }
+      contentValues.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
+      contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+      context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+          ?: throw Exception("FileUri not inserted in content resolver");
+
+      Logger.info("File inserted in content database")
+    }
+
+    val buffer = ByteArray(8 * 1024) // 8KB buffer
+    var bytesRead: Int
+
+    val downloadsDir =
+      Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).toString()
+
+    val destination = File(downloadsDir, filename)
+    val outputStream = FileOutputStream(destination)
+
+    try {
+      while (fileInputStream.read(buffer).also { bytesRead = it } != -1) {
+        outputStream.write(buffer, 0, bytesRead)
+      }
+    } catch (e: IOException) {
+      e.printStackTrace()
+    } finally {
+      fileInputStream.close()
+      outputStream.close()
+    }
+
+    Logger.info("Closed stream")
+
+  }
+
+  fun getMimeType(contentResolver: ContentResolver, uri: String): String? {
+    return contentResolver.getType(getFileUri(uri, true))
   }
 }

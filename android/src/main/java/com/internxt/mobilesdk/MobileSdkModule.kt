@@ -214,8 +214,19 @@ class MobileSdkModule(val reactContext: ReactApplicationContext) :
 
     } catch (e: Exception) {
       e.printStackTrace()
-     // To late to reject, we only enqueue the job
+     // Too late to reject, we only enqueue the job
     }
+  }
+
+  @ReactMethod
+  fun saveToDownloads(originUri: String, promise: Promise) {
+    try {
+      FS.saveFileToDownloadsDirectory(reactApplicationContext, originUri)
+    } catch (exception: Exception) {
+      exception.printStackTrace()
+      promise.reject(exception)
+    }
+
   }
 
 

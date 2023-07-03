@@ -66,6 +66,10 @@ export const NativeSdk = {
   core: {
     uploadFile,
   },
+  fs: {
+    saveFileToDownloads: (originPath: string) =>
+      MobileSdk.saveFileToDownloads(originPath),
+  },
   photos: {
     processPhotosItem,
     onPhotoSynced: (callback: (data: any) => void) => {
