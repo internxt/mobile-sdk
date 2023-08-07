@@ -1,7 +1,9 @@
 package com.internxt.mobilesdk
 
 
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.PackageManagerCompat.LOG_TAG
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.work.*
@@ -11,10 +13,16 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.internxt.mobilesdk.config.MobileSdkAuthTokens
 import com.internxt.mobilesdk.config.MobileSdkConfigLoader
 import com.internxt.mobilesdk.core.*
+import com.internxt.mobilesdk.data.photos.CreatePhotoPayload
+import com.internxt.mobilesdk.data.photos.DevicePhotosItemType
+import com.internxt.mobilesdk.data.photos.SyncedPhoto
 import com.internxt.mobilesdk.services.FS
+import com.internxt.mobilesdk.services.photos.DevicePhotosScanner
+import com.internxt.mobilesdk.services.photos.DevicePhotosSyncChecker
 import com.internxt.mobilesdk.services.photos.PhotosProcessingWorker
 import com.internxt.mobilesdk.utils.CryptoUtils
 import com.internxt.mobilesdk.utils.InvalidArgumentException
+import com.internxt.mobilesdk.utils.JsonUtils
 import com.internxt.mobilesdk.utils.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -22,14 +30,19 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.concurrent.Executors
 
 
-class MobileSdkModule(val reactContext: ReactApplicationContext) :
+class MobileSdkModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
+
+  private val devicePhotosScanner = DevicePhotosScanner(reactContext)
+  private val devicePhotosSyncChecker = DevicePhotosSyncChecker(reactContext)
   private val upload = Upload()
   private val encrypt = Encrypt()
+
   private val photosEnqueuer = Executors.newFixedThreadPool(3)
   private var scheduledPhotosToProcess = 0
   private var processedPhotos = 0
@@ -166,10 +179,10 @@ class MobileSdkModule(val reactContext: ReactApplicationContext) :
       val deviceId = config.getString("deviceId") ?: throw InvalidArgumentException("Missing deviceId")
       Logger.info("Scheduling photo processing")
 
-
+      val events =
+        reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
       photosEnqueuer.execute {
-        val events =
-          reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+
 
         val requestBuilder = OneTimeWorkRequestBuilder<PhotosProcessingWorker>()
 
@@ -222,8 +235,97 @@ class MobileSdkModule(val reactContext: ReactApplicationContext) :
   fun saveToDownloads(originUri: String, promise: Promise) {
     try {
       FS.saveFileToDownloadsDirectory(reactApplicationContext, originUri)
+      promise.resolve(true)
     } catch (exception: Exception) {
       exception.printStackTrace()
+      promise.reject(exception)
+    }
+  }
+
+  @ReactMethod
+  fun initPhotosProcessor(config: ReadableMap, promise: Promise) {
+
+    try {
+      val mnemonic = config.getString("mnemonic") ?: throw InvalidArgumentException("Missing mnemonic")
+      val bucketId = config.getString("bucketId") ?: throw InvalidArgumentException("Missing bucketId")
+      val photosUserId = config.getString("photosUserId") ?: throw InvalidArgumentException("Missing photosUserId")
+      val deviceId = config.getString("deviceId") ?: throw InvalidArgumentException("Missing deviceId")
+
+      // Resolve the initialization
+      promise.resolve(true)
+
+      // Get the React Event emitter, we'll send updates from this
+      val events =
+        reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+
+      val allPhotos = devicePhotosScanner.getDevicePhotos()
+      val allVideos = devicePhotosScanner.getDeviceVideos()
+
+      val allItems = allPhotos.plus(allVideos)
+
+      val workManager = WorkManager
+        .getInstance(reactContext)
+
+      Logger.info("Found ${allItems.size} photos in the device")
+
+      Logger.info("Content ${allItems.contentToString()}")
+      allItems.forEach {
+        photosEnqueuer.execute {
+
+          val isSynced = devicePhotosSyncChecker.isSynced(it)
+
+          if(isSynced) {
+            Logger.info("${it.displayName} is already synced, skipping processing")
+          } else {
+            val requestBuilder = OneTimeWorkRequestBuilder<PhotosProcessingWorker>()
+            val data = Data.Builder()
+
+
+            data.putString("displayName", it.displayName)
+            data.putString("bucketId", bucketId)
+            data.putString("plainFilePath", it.uri.toString())
+            data.putString("mnemonic", mnemonic)
+            data.putString("photosUserId", photosUserId)
+            data.putString("deviceId", deviceId)
+            data.putString("type", it.type.name)
+            data.putString("takenAtISO", it.takenAt.format(DateTimeFormatter.ISO_DATE_TIME))
+
+            requestBuilder.setInputData(data.build())
+            requestBuilder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+
+
+            val request = requestBuilder.build()
+
+            workManager.enqueueUniqueWork(it.displayName, ExistingWorkPolicy.REPLACE, request)
+
+            Logger.info("Photos processing task enqueued correctly")
+
+            val workInfoLiveData =workManager.getWorkInfoByIdLiveData(request.id)
+            val observer = ((reactContext as ReactContext).currentActivity as AppCompatActivity)
+
+            GlobalScope.launch(Dispatchers.Main) {
+              workInfoLiveData.observe(observer) {
+
+                if (it !== null && (it.state == WorkInfo.State.SUCCEEDED || it.state == WorkInfo.State.FAILED || it.state == WorkInfo.State.CANCELLED)) {
+                  Logger.info("Received work info update for work ${it.id}")
+                  if(it.state == WorkInfo.State.SUCCEEDED) {
+                    val encodedPhoto = it.outputData.getString("result")
+                    if(encodedPhoto != null) {
+                      val map = Arguments.createMap()
+
+                      map.putString("result", encodedPhoto)
+                      events.emit("onPhotoProcessed", map)
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+        }
+      }
+    } catch (exception: Exception) {
+      Logger.error(exception)
       promise.reject(exception)
     }
 

@@ -68,9 +68,10 @@ export const NativeSdk = {
   },
   fs: {
     saveFileToDownloads: (originPath: string) =>
-      MobileSdk.saveFileToDownloads(originPath),
+      MobileSdk.saveToDownloads(originPath),
   },
   photos: {
+    initPhotosProcessor: MobileSdk.initPhotosProcessor as () => Promise<void>,
     processPhotosItem,
     onPhotoSynced: (callback: (data: any) => void) => {
       const subscription = DeviceEventEmitter.addListener(

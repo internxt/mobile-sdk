@@ -1,39 +1,42 @@
 package com.internxt.mobilesdk.services.photos
 
+import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.ExifInterface
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.util.Size
+
 
 import com.internxt.mobilesdk.core.*
 import com.internxt.mobilesdk.data.photos.CreatePhotoPayload
+import com.internxt.mobilesdk.data.photos.DevicePhotosItemType
 import com.internxt.mobilesdk.data.photos.PhotoPreview
+import com.internxt.mobilesdk.data.photos.SyncedPhoto
 import com.internxt.mobilesdk.services.FS
 import com.internxt.mobilesdk.services.crypto.Hash
 import com.internxt.mobilesdk.utils.CryptoUtils
 import com.internxt.mobilesdk.utils.Logger
 import com.internxt.mobilesdk.utils.Performance
 import java.io.*
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.attribute.BasicFileAttributes
-import java.text.SimpleDateFormat
-import java.util.*
-import kotlin.time.Duration.Companion.milliseconds
+
+import kotlin.Exception
+
 
 
 data class PhotosItemProcessConfig(
-  val sourcePath: String,
-  val originalSourceStream: InputStream,
-  val previewSourceStream: InputStream,
-  val previewDestination: String,
-  val encryptedPreviewDestination: String,
-  val encryptedOriginalDestination: String,
-  val encryptedOriginalStream: OutputStream,
+  val displayName: String,
+  val source: File,
+  val previewDestination: File,
+  val encryptedPreviewDestination: File,
+  val encryptedOriginalDestination: File,
   val mnemonic: String,
   val bucketId: String,
   val photosUserId: String,
-  val userId: String,
   val deviceId: String,
-  val takenAtISO: String
+  val takenAtISO: String,
+  val type: DevicePhotosItemType
 )
 
 data class EncryptPhotosItemResult(
@@ -42,7 +45,7 @@ data class EncryptPhotosItemResult(
   val index: ByteArray
 )
 
-class PhotosLocalSyncManager {
+class PhotosLocalSyncManager(private val context: Context) {
 
   private val photosPreviewGenerator = PhotosPreviewGenerator()
   private val encrypt = Encrypt()
@@ -60,25 +63,48 @@ class PhotosLocalSyncManager {
    * 5. Original Photo upload
    * 6. Create Photo in photos api
    */
-  fun processItem(config: PhotosItemProcessConfig): String {
+  fun processItem(config: PhotosItemProcessConfig): SyncedPhoto? {
     val totalTimeMeasurer = Performance.measureTime()
     val previewTimeMeasurer = Performance.measureTime()
-    Logger.info("Processing PhotosItem at ${config.sourcePath}")
+    Logger.info("Processing PhotosItem at ${config.source.absolutePath}")
+
+
     // 1. Generate a preview for the item
-    val previewBitmap = photosPreviewGenerator.generatePreview(config.previewSourceStream)
-    val previewFile = photosPreviewGenerator.writeBitmapToFile(previewBitmap, config.previewDestination)
+
+    var previewBitmap: Bitmap? = null
+
+    if (config.type == DevicePhotosItemType.IMAGE) {
+      Logger.info("Generating image preview for ${config.source.absolutePath}")
+      val inputStream = FileInputStream(config.source.absolutePath)
+      previewBitmap = photosPreviewGenerator.generateImagePreview(inputStream = inputStream, 512)
+      inputStream.close()
+    }
+
+    if(config.type == DevicePhotosItemType.VIDEO) {
+      Logger.info("Generating video preview for ${config.source.absolutePath}")
+      previewBitmap = photosPreviewGenerator.generateVideoPreview(config.source.absolutePath, 512)
+    }
+
+    if(previewBitmap == null) throw Exception("Unable to generate preview for ${config.displayName}")
+    val previewFile = photosPreviewGenerator.writeBitmapToFile(previewBitmap, config.previewDestination.absolutePath)
 
     Logger.info("Generated preview at ${config.previewDestination} in ${previewTimeMeasurer.getMs()}ms")
 
     val previewEncryptTimeMeasurer = Performance.measureTime()
     Logger.info("Encrypting preview")
+
+    val previewInputStream = FileInputStream(previewFile)
+    val previewOutputStream = FileOutputStream(config.encryptedPreviewDestination)
     // 2. Encrypt the preview file
     val encryptPreviewResult = encryptPhotosItem(
       config.mnemonic,
       config.bucketId,
-      FileInputStream(previewFile),
-      FileOutputStream(config.encryptedPreviewDestination)
+      previewInputStream,
+      previewOutputStream
     )
+
+    previewInputStream.close()
+    previewOutputStream.close()
 
     Logger.info("Preview encrypted in ${previewEncryptTimeMeasurer.getMs()}ms")
 
@@ -90,22 +116,30 @@ class PhotosLocalSyncManager {
       UploadFileConfig(
       bucketId = config.bucketId,
       mnemonic = config.mnemonic,
-      encryptedFilePath = config.encryptedPreviewDestination,
+      encryptedFilePath = config.encryptedPreviewDestination.path,
       iv = encryptPreviewResult.iv,
       key = encryptPreviewResult.fileKey,
       index = encryptPreviewResult.index
     ))
 
     Logger.info("Preview uploaded in ${uploadPreviewTimeMeasurer.getMs()}ms")
+
+    Logger.info("Copying EXIF metadata")
+
     val originalEncryptTimeMeasurer = Performance.measureTime()
 
+    val sourceInputStream = FileInputStream(config.source.absolutePath)
+    val encryptedOutputStream = FileOutputStream(config.encryptedOriginalDestination)
     // 4. Encrypt the original Photo
     val encryptOriginalResult = encryptPhotosItem(
       config.mnemonic,
       config.bucketId,
-      config.originalSourceStream,
-      config.encryptedOriginalStream
+      sourceInputStream,
+      encryptedOutputStream
     )
+
+    sourceInputStream.close()
+    encryptedOutputStream.close()
     Logger.info("Original photo encrypted in ${originalEncryptTimeMeasurer.getMs()}ms")
 
     val uploadOriginalTimeMeasurer = Performance.measureTime()
@@ -115,7 +149,7 @@ class PhotosLocalSyncManager {
       UploadFileConfig(
         bucketId = config.bucketId,
         mnemonic = config.mnemonic,
-        encryptedFilePath = config.encryptedOriginalDestination,
+        encryptedFilePath = config.encryptedOriginalDestination.path,
         iv = encryptOriginalResult.iv,
         key = encryptOriginalResult.fileKey,
         index = encryptOriginalResult.index
@@ -127,8 +161,6 @@ class PhotosLocalSyncManager {
     Logger.info("Original Photo FileId: ${uploadOriginalResult.fileId}")
     Logger.info("Photo item uploaded in ${totalTimeMeasurer.getMs()}ms")
 
-
-
     val previewPayload = PhotoPreview(
       width = 512,
       height = 512,
@@ -137,23 +169,22 @@ class PhotosLocalSyncManager {
       type = "JPEG"
     )
 
-    val name = FS.getFilenameFromPath(config.sourcePath)
-    val type = FS.getFileTypeFromPath(config.sourcePath)
+    Logger.info("Display name is ${config.displayName}")
 
-    val exif = ExifInterface(config.sourcePath)
+    val parts = config.displayName.split(".")
+    if(parts.size < 2) throw Exception("File is missing name or type")
+    val name = parts[0]
+    val type = parts[1]
 
-    Logger.info("Exif width ${exif.getAttribute(ExifInterface.TAG_IMAGE_WIDTH)}")
-    Logger.info("Exif height ${exif.getAttribute(ExifInterface.TAG_IMAGE_LENGTH)}")
-
-    val options: BitmapFactory.Options = BitmapFactory.Options()
-    options.inJustDecodeBounds = true
-    BitmapFactory.decodeFile(config.sourcePath, options)
-    Logger.info("Photo dimensions ${options.outWidth}w x ${options.outHeight}h")
+    val dimensions = getItemDimensions(config.source, config.type) ?: throw Exception("Cannot get size for item at ${config.source.absolutePath}")
+    val duration = getItemDuration(config.source, config.type)
+    Logger.info("Photo dimensions ${dimensions.width}w x ${dimensions.height}h")
     val hasher = hash.getSha256Hasher()
-    val contentHash = hash.getHashFromStream(FileInputStream(config.sourcePath), hash.getSha256Hasher())
+    val hashInputStream = FileInputStream(config.source)
+    val contentHash = hash.getHashFromStream(hashInputStream, hash.getSha256Hasher())
 
     Logger.info("Content hash is ${CryptoUtils.bytesToHex(contentHash)}")
-    hasher.update(config.userId.toByteArray(Charsets.UTF_8))
+    hasher.update(config.photosUserId.toByteArray(Charsets.UTF_8))
 
     Logger.info("Image name is $name")
     hasher.update(name.toByteArray(Charsets.UTF_8))
@@ -163,25 +194,28 @@ class PhotosLocalSyncManager {
 
     val hash = CryptoUtils.bytesToHex(hasher.digest())
 
-    Logger.info("Photo hash $hash")
+    val itemType = if(config.type == DevicePhotosItemType.IMAGE) "PHOTO" else  "VIDEO"
+    Logger.info("Photo hash $hash for itemType $itemType")
     val createPhotoPayload = CreatePhotoPayload(
       name = name,
       userId = config.photosUserId,
       deviceId = config.deviceId,
       fileId = uploadOriginalResult.fileId,
-      width = options.outWidth,
-      height = options.outHeight,
-      itemType = "PHOTO",
+      width = dimensions.width,
+      height = dimensions.height,
+      itemType = itemType,
       size = uploadOriginalResult.size,
       type = type,
       hash = hash,
       networkBucketId = config.bucketId,
       takenAt = config.takenAtISO,
       previews = listOf(previewPayload),
-      previewId = uploadPreviewResult.fileId
+      previewId = uploadPreviewResult.fileId,
+      duration = duration
     )
     val result = photosApi.createPhoto(createPhotoPayload)
 
+    hashInputStream.close()
     Logger.info("Photo item uploaded and created in ${totalTimeMeasurer.getMs()}ms")
 
     return result
@@ -214,5 +248,67 @@ class PhotosLocalSyncManager {
       fileKey = fileKey,
       index = index
     )
+  }
+
+  private fun getItemDimensions(source: File, type: DevicePhotosItemType): Size? {
+    if(type == DevicePhotosItemType.IMAGE) {
+      val bitmapInputStream = FileInputStream(source)
+
+
+      val options = BitmapFactory.Options().apply {
+        // Set inJustDecodeBounds to true to only decode the image dimensions
+        inJustDecodeBounds = true
+      }
+      options.inJustDecodeBounds = true
+      BitmapFactory.decodeStream(bitmapInputStream, null, options)
+
+      bitmapInputStream?.close()
+
+      return Size(options.outWidth, options.outHeight)
+    }
+
+    if(type == DevicePhotosItemType.VIDEO) {
+      val retriever = MediaMetadataRetriever()
+      try {
+        retriever.setDataSource(source.absolutePath)
+        val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt()
+        val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt()
+        return if (width != null && height != null) {
+          Size(width, height)
+        } else {
+          null
+        }
+      } catch (e: Exception) {
+        throw e
+      } finally {
+        retriever.release()
+      }
+    }
+
+    return null
+  }
+
+  private fun getItemDuration(source: File, type: DevicePhotosItemType): Long? {
+    if(type == DevicePhotosItemType.IMAGE) {
+      return null
+    }
+
+    if(type == DevicePhotosItemType.VIDEO) {
+      val retriever = MediaMetadataRetriever()
+      try {
+        retriever.setDataSource(source.absolutePath)
+        val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+          ?: return null
+
+        // MS to seconds
+        return duration / 1000
+      } catch (e: Exception) {
+        throw e
+      } finally {
+        retriever.release()
+      }
+    }
+
+    return null
   }
 }

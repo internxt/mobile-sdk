@@ -47,6 +47,54 @@ data class CreatePhotoPayload(
   val takenAt: String,
   @Json()
   val networkBucketId: String,
+  @Json()
+  val duration: Long?,
 )
 
+
+
+
+
+
+@JsonClass(generateAdapter = true)
+data class SyncedPhoto(
+  @Json()
+  val id: String,
+  @Json()
+  val name: String,
+  @Json()
+  val type: String,
+  @Json()
+  val size: Long,
+  @Json()
+  val width: Int,
+  @Json()
+  val height: Int,
+  @Json()
+  val fileId: String,
+  @Json()
+  val previewId: String,
+  @Json()
+  val previews: List<PhotoPreview>,
+  @Json()
+  val deviceId: String,
+  @Json()
+  val userId: String,
+  @Json()
+  val hash: String,
+  @Json()
+  val itemType: String,
+  @Json()
+  val takenAt: String,
+  @Json()
+  val createdAt: String,
+  @Json()
+  val updatedAt: String,
+  @Json()
+  val status: String,
+  @Json()
+  val networkBucketId: String,
+  @Json()
+  val duration: Long?,
+)
 

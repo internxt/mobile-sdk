@@ -1,0 +1,16 @@
+{
+  "DRIVE_API_URL": "",
+  "AUTH_TOKEN": "",
+  "PLAIN_MNEMONIC": "",
+  "DRIVE_NEW_API_URL": "",
+  "BRIDGE_URL": "",
+  "BRIDGE_AUTH_BASE64": "",
+  "PHOTOS_API_URL": "",
+  "PHOTOS_NETWORK_API_URL": "",
+  "CRIPTO_SECRET": "",
+  "MAGIC_IV": "",
+  "MAGIC_SALT": "",
+  "PHOTOS_BUCKET_ID": "",
+  "PHOTOS_DEVICE_ID": "",
+  "PHOTOS_USER_ID": ""
+}

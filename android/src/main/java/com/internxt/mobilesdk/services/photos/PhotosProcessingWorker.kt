@@ -1,96 +1,140 @@
 package com.internxt.mobilesdk.services.photos
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.work.*
-import com.internxt.mobilesdk.R
+import com.internxt.mobilesdk.data.photos.DevicePhotosItemType
+import com.internxt.mobilesdk.data.photos.SyncedPhoto
 import com.internxt.mobilesdk.services.FS
+import com.internxt.mobilesdk.services.database.AppDatabase
+import com.internxt.mobilesdk.services.database.photos.PhotosDBItem
+import com.internxt.mobilesdk.services.database.photos.SyncedPhotosItem
+import com.internxt.mobilesdk.utils.JsonUtils
 import com.internxt.mobilesdk.utils.Logger
 import com.internxt.mobilesdk.utils.Performance
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
+import java.time.OffsetDateTime
+
 
 class PhotosProcessingWorker(private val context: Context, private val workerParams: WorkerParameters):
   Worker(context, workerParams) {
-  private val notificationManager = context.getSystemService(NotificationManager::class.java)
 
-  private val photosLocalSyncManager = PhotosLocalSyncManager()
+  private val photosLocalSyncManager = PhotosLocalSyncManager(context)
   override fun doWork(): Result {
 
-    val bucketId = workerParams.inputData.getString("bucketId") ?: throw Exception("Missing bucketId")
-    val plainFilePath = workerParams.inputData.getString("plainFilePath") ?: throw Exception("Missing plainFilePath")
-    val mnemonic = workerParams.inputData.getString("mnemonic") ?: throw Exception("Missing mnemonic")
-    val userId = workerParams.inputData.getString("userId") ?: throw Exception("Missing userId")
-    val photosUserId = workerParams.inputData.getString("photosUserId") ?: throw Exception("Missing photosUserId")
-    val deviceId = workerParams.inputData.getString("deviceId") ?: throw Exception("Missing deviceId")
-    val takenAtISO = workerParams.inputData.getString("takenAtISO") ?: throw Exception("Missing takenAtISO")
+    try {
 
-    Logger.info("Begin of Photo process")
+      val displayName = workerParams.inputData.getString("displayName") ?: throw Exception("Missing displayName")
+      val bucketId = workerParams.inputData.getString("bucketId") ?: throw Exception("Missing bucketId")
+      val plainFilePath = workerParams.inputData.getString("plainFilePath") ?: throw Exception("Missing plainFilePath")
+      val mnemonic = workerParams.inputData.getString("mnemonic") ?: throw Exception("Missing mnemonic")
+      val photosUserId = workerParams.inputData.getString("photosUserId") ?: throw Exception("Missing photosUserId")
+      val deviceId = workerParams.inputData.getString("deviceId") ?: throw Exception("Missing deviceId")
+      val takenAtISO = workerParams.inputData.getString("takenAtISO") ?: throw Exception("Missing takenAtISO")
+      val type = workerParams.inputData.getString("type") ?: throw Exception("Missing type")
 
-    val processStart = Performance.measureTime()
-    val outputDir: File = context.cacheDir
-    val previewDestination = File.createTempFile("tmp", ".jpg", outputDir)
-    val uri = FS.getFileUri(plainFilePath, true)
-    val originalSourceStream = context.contentResolver.openInputStream(uri) ?: throw IOException("Unable to open preview input stream at ${uri.path}")
-    val previewSourceStream = context.contentResolver.openInputStream(uri) ?: throw IOException("Unable to open input stream at ${uri.path}")
+      val appDatabase = AppDatabase.getInstance(context)
 
-    // Write here the encrypted photo result
-    val encryptedOriginalDestination = File.createTempFile("tmp_original", ".enc", outputDir)
-    val encryptedOriginalStream = FileOutputStream(encryptedOriginalDestination)
+      Logger.info("Begin of Photo process")
 
-    // Write here the encrypted preview result
-    val encryptedPreviewFile = File.createTempFile("tmp_preview", ".enc", outputDir)
-
-    val config = PhotosItemProcessConfig(
-      bucketId = bucketId,
-      mnemonic = mnemonic,
-      sourcePath = plainFilePath.split(":")[1],
-      originalSourceStream = originalSourceStream,
-      previewSourceStream = previewSourceStream,
-      previewDestination  = previewDestination.path,
-      encryptedPreviewDestination = encryptedPreviewFile.path,
-      encryptedOriginalDestination = encryptedOriginalDestination.path,
-      encryptedOriginalStream = encryptedOriginalStream,
-      userId = userId,
-      photosUserId = photosUserId,
-      deviceId = deviceId,
-      takenAtISO = takenAtISO
-    )
-    val serializedResult = photosLocalSyncManager.processItem(config)
+      Logger.info("Reading photo from $plainFilePath")
 
 
-    // Cleanup
-    FS.unlinkIfExists(encryptedOriginalDestination.path)
-    FS.unlinkIfExists(encryptedPreviewFile.path)
+      val processStart = Performance.measureTime()
+      val outputDir: File = context.cacheDir
 
-    Logger.info("Photo processing completed in ${processStart.getMs()}ms")
-    val data = Data.Builder()
-    data.putString("result", serializedResult)
-    return Result.success(data.build())
-  }
+      val sourceFileExtension = FS.getExtension(displayName) ?: throw Exception("Cannot get extension for $plainFilePath")
 
-  private fun createNotificationChannel() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      val notificationChannel = notificationManager?.getNotificationChannel(CHANNEL_ID)
-      if (notificationChannel == null) {
-        notificationManager?.createNotificationChannel(
-          NotificationChannel(
-            CHANNEL_ID, TAG, NotificationManager.IMPORTANCE_LOW
-          )
-        )
+
+      val previewTmpDestination = File.createTempFile("tmp_",".jpg", outputDir)
+      val sourceTmpDestination = File.createTempFile("tmp_source",
+        ".$sourceFileExtension", outputDir)
+
+      val uri = FS.getFileUri(plainFilePath, true)
+
+
+
+      val sourceTmpUri = FS.getFileUri(sourceTmpDestination.absolutePath, true)
+
+      val sourceTmpCopyOutputStream = context.contentResolver.openOutputStream(sourceTmpUri) ?: throw IOException("Unable to open output stream to write to ${sourceTmpDestination.absolutePath}")
+      val originalSourceStream = context.contentResolver.openInputStream(uri) ?: throw IOException("Unable to open preview input stream at ${uri.path}")
+
+      // Copy the source to our cache directory
+      originalSourceStream.copyTo(sourceTmpCopyOutputStream)
+
+
+      val isEmpty = FS.fileIsEmpty(sourceTmpDestination.absolutePath)
+
+      Logger.info("File at ${sourceTmpDestination.absolutePath} is empty $isEmpty")
+
+      // Write here the encrypted photo result
+      val encryptedOriginalFileDestination = File.createTempFile("tmp_original_", ".enc", outputDir)
+
+      // Write here the encrypted preview result
+      val encryptedPreviewFileDestination = File.createTempFile("tmp_preview_", ".enc", outputDir)
+
+
+      val config = PhotosItemProcessConfig(
+        bucketId = bucketId,
+        mnemonic = mnemonic,
+        source = sourceTmpDestination,
+        previewDestination  = previewTmpDestination,
+        encryptedPreviewDestination = encryptedPreviewFileDestination,
+        encryptedOriginalDestination = encryptedOriginalFileDestination,
+        photosUserId = photosUserId,
+        deviceId = deviceId,
+        takenAtISO = takenAtISO,
+        displayName = displayName,
+        type = enumValueOf<DevicePhotosItemType>(type)
+      )
+      val syncedPhoto = photosLocalSyncManager.processItem(config) ?: throw Exception("Photos item with name $displayName was not processed correctly")
+
+      appDatabase.syncedPhotosDao()?.updateOrCreateSyncedPhotosItem(
+       SyncedPhotosItem(
+         id = syncedPhoto.id,
+         createdAt = syncedPhoto.createdAt,
+         updatedAt = syncedPhoto.updatedAt,
+         deviceId = syncedPhoto.deviceId,
+         userId = syncedPhoto.userId,
+         fileId = syncedPhoto.fileId,
+         previewId = syncedPhoto.previewId,
+         hash = syncedPhoto.hash,
+         name = syncedPhoto.name,
+         takenAt = syncedPhoto.takenAt,
+         width = syncedPhoto.width,
+         height = syncedPhoto.height,
+         networkBucketId = syncedPhoto.networkBucketId,
+         size = syncedPhoto.size,
+         status = syncedPhoto.status,
+         type = syncedPhoto.type,
+         itemType = syncedPhoto.itemType,
+         duration = syncedPhoto.duration
+       )
+      )
+      // Cleanup
+      FS.unlinkIfExists(previewTmpDestination.absolutePath)
+      FS.unlinkIfExists(sourceTmpDestination.absolutePath)
+      FS.unlinkIfExists(encryptedOriginalFileDestination.absolutePath)
+
+      Logger.info("Photo processing completed in ${processStart.getMs()}ms")
+
+      val data = Data.Builder()
+
+      val adapter = JsonUtils.moshi.adapter(SyncedPhoto::class.java)
+
+      data.putString("result", adapter.toJson(syncedPhoto))
+
+      return Result.success(data.build())
+
+    } catch (exception: Exception) {
+      Logger.error("Error processing photo: $exception")
+
+      return if(runAttemptCount <= 3) {
+        Result.retry()
+      } else {
+        Result.failure()
       }
     }
-  }
-
-  companion object {
-
-    const val TAG = "PhotosProcessing"
-    const val NOTIFICATION_ID = 42
-    const val CHANNEL_ID = "photos_work_request"
   }
 }
 

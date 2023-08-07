@@ -74,6 +74,7 @@ android {
 def kotlin_version = getExtOrDefault("kotlinVersion")
 def spongycastle_version = "1.58.0.0"
 def work_version = "2.8.0"
+def room_version = "2.5.0"
 
 dependencies {
 
@@ -82,6 +83,11 @@ dependencies {
   // For < 0.71, this will be from the local maven repo
   // For > 0.71, this will be replaced by `com.facebook.react:react-android:$version` by react gradle plugin
   //noinspection GradleDynamicVersion
+
+
+
+  implementation "androidx.room:room-runtime:$room_version"
+  ksp "androidx.room:room-compiler:$room_version"
   implementation("androidx.work:work-runtime:$work_version")
   implementation("androidx.work:work-runtime-ktx:$work_version")
   implementation 'com.facebook.react:react-native:+'

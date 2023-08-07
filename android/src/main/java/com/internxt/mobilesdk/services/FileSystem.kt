@@ -1,16 +1,16 @@
 package com.internxt.mobilesdk.services
+
 import android.content.ContentResolver
 import android.content.ContentValues
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import android.webkit.MimeTypeMap
 import com.facebook.react.bridge.ReactApplicationContext
 import com.internxt.mobilesdk.utils.FileAccessRejectionException
-import java.io.*
 import com.internxt.mobilesdk.utils.Logger
-import kotlin.io.path.Path
+import java.io.*
 
 
 // This class is called FS to avoid naming conflicts with Java FileSystem class
@@ -77,6 +77,44 @@ object FS {
     if(index == -1 ) throw Exception("This file does not have an extension")
     return filename.substring(index+1)
   }
+
+  @Throws(IOException::class)
+  fun copyExif(oldFileStream: InputStream, newFileStream: InputStream) {
+    val oldExif = ExifInterface(oldFileStream)
+    val attributes = arrayOf(
+      ExifInterface.TAG_F_NUMBER,
+      ExifInterface.TAG_DATETIME,
+      ExifInterface.TAG_DATETIME_DIGITIZED,
+      ExifInterface.TAG_EXPOSURE_TIME,
+      ExifInterface.TAG_FLASH,
+      ExifInterface.TAG_FOCAL_LENGTH,
+      ExifInterface.TAG_GPS_ALTITUDE,
+      ExifInterface.TAG_GPS_ALTITUDE_REF,
+      ExifInterface.TAG_GPS_DATESTAMP,
+      ExifInterface.TAG_GPS_LATITUDE,
+      ExifInterface.TAG_GPS_LATITUDE_REF,
+      ExifInterface.TAG_GPS_LONGITUDE,
+      ExifInterface.TAG_GPS_LONGITUDE_REF,
+      ExifInterface.TAG_GPS_PROCESSING_METHOD,
+      ExifInterface.TAG_GPS_TIMESTAMP,
+      ExifInterface.TAG_IMAGE_LENGTH,
+      ExifInterface.TAG_IMAGE_WIDTH,
+      ExifInterface.TAG_ISO_SPEED_RATINGS,
+      ExifInterface.TAG_MAKE,
+      ExifInterface.TAG_MODEL,
+      ExifInterface.TAG_ORIENTATION,
+      ExifInterface.TAG_SUBSEC_TIME,
+      ExifInterface.TAG_SUBSEC_TIME_DIGITIZED,
+      ExifInterface.TAG_SUBSEC_TIME_ORIGINAL,
+      ExifInterface.TAG_WHITE_BALANCE
+    )
+    val newExif = ExifInterface(newFileStream)
+    for (i in attributes.indices) {
+      val value = oldExif.getAttribute(attributes[i])
+      if (value != null) newExif.setAttribute(attributes[i], value)
+    }
+    newExif.saveAttributes()
+  }
   fun fileIsEmpty(path: String): Boolean {
     val file = File(path)
     try {
@@ -101,7 +139,7 @@ object FS {
         ?: throw Exception("Cannot open Input stream at path $originalFilePath")
 
 
-    if (false && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 
       val contentValues = ContentValues();
 
@@ -147,5 +185,16 @@ object FS {
 
   fun getMimeType(contentResolver: ContentResolver, uri: String): String? {
     return contentResolver.getType(getFileUri(uri, true))
+  }
+
+  fun getExtension(filePath: String): String? {
+    val file = File(filePath)
+    val fileName = file.name
+    val dotIndex = fileName.lastIndexOf('.')
+    return if (dotIndex > 0 && dotIndex < fileName.length - 1) {
+      fileName.substring(dotIndex + 1)
+    } else {
+      null
+    }
   }
 }
