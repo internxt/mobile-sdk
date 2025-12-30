@@ -1,6 +1,6 @@
 {
   "name": "@internxt/mobile-sdk",
-  "version": "0.3.0",
+  "version": "0.3.0-alpha.0",
   "description": "test",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
