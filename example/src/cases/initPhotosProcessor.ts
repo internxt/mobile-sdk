@@ -5,12 +5,7 @@ export const initPhotosProcessor = async () => {
     photos.onPhotoSynced((data) => {
       console.log('PHOTO RECEIVED: ', JSON.parse(data.result).id);
     });
-    return photos.initPhotosProcessor({
-      mnemonic: '',
-      bucketId: '',
-      photosUserId: '',
-      deviceId: '',
-    });
+    return photos.initPhotosProcessor();
   } catch (e) {
     return e;
   }
