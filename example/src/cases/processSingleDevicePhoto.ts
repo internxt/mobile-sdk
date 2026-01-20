@@ -14,7 +14,7 @@ export const processSingleDevicePhoto = async () => {
         pickerResult.fileCopyUri,
         config.getProperty('PLAIN_MNEMONIC'),
         config.getProperty('PHOTOS_BUCKET_ID'),
-        config.getProperty('PHOTOS_USER_ID'),
+        config.getProperty('PLAIN_MNEMONIC'),
         config.getProperty('PHOTOS_DEVICE_ID'),
         config.getProperty('PHOTOS_USER_ID'),
         new Date().toISOString()
