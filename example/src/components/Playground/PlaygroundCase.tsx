@@ -1,6 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useTailwind } from 'tailwind-rn';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+} from 'react-native';
+
 export interface PlaygroundCaseProps {
   name: string;
   description: string;
@@ -10,35 +16,77 @@ export interface PlaygroundCaseProps {
 }
 
 export const PlaygroundCase: React.FC<PlaygroundCaseProps> = (props) => {
-  const tailwind = useTailwind();
   return (
-    <View style={tailwind('bg-gray-5 px-4 py-4 rounded-lg')}>
-      <Text style={tailwind('font-medium text-base')}>{props.name}</Text>
-      <Text>{props.description}</Text>
+    <View style={styles.container}>
+      <Text style={styles.name}>{props.name}</Text>
+      <Text style={styles.description}>{props.description}</Text>
       <TouchableOpacity
         activeOpacity={0.9}
-        style={tailwind(
-          'bg-primary font-bold h-10 rounded-lg flex items-center justify-center w-40 mt-4'
-        )}
+        style={styles.button}
         onPress={props.onPress}
       >
-        <Text style={tailwind('font-bold text-white text-base')}>
+        <Text style={styles.buttonText}>
           {props.actionLabel ?? 'Run Case'}
         </Text>
       </TouchableOpacity>
-      <View style={tailwind('mt-6')}>
-        <Text style={tailwind('font-bold')}>Output</Text>
+      <View style={styles.outputContainer}>
+        <Text style={styles.outputLabel}>Output</Text>
         {props.output ? (
           <ScrollView
-            contentContainerStyle={tailwind('p-2')}
-            style={tailwind('bg-white w-full h-60 mt-2 rounded-lg')}
+            contentContainerStyle={styles.outputContent}
+            style={styles.outputScroll}
           >
             <Text>{JSON.stringify(props.output, null, 2)}</Text>
           </ScrollView>
-        ) : (
-          <></>
-        )}
+        ) : null}
       </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 8,
+  },
+  name: {
+    fontWeight: '500',
+    fontSize: 16,
+  },
+  description: {
+    color: '#666',
+    marginTop: 4,
+  },
+  button: {
+    backgroundColor: '#0066FF',
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 160,
+    marginTop: 16,
+  },
+  buttonText: {
+    fontWeight: 'bold',
+    color: 'white',
+    fontSize: 16,
+  },
+  outputContainer: {
+    marginTop: 24,
+  },
+  outputLabel: {
+    fontWeight: 'bold',
+  },
+  outputContent: {
+    padding: 8,
+  },
+  outputScroll: {
+    backgroundColor: 'white',
+    width: '100%',
+    height: 240,
+    marginTop: 8,
+    borderRadius: 8,
+  },
+});

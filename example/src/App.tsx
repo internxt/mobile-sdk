@@ -1,21 +1,17 @@
 import * as React from 'react';
-
-import { View, Text } from 'react-native';
-
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useEffect, useState } from 'react';
 import { initSdk, setAuthTokens } from '@internxt/mobile-sdk';
 import { PlaygroundCase } from './components/Playground/PlaygroundCase';
-import { TailwindProvider, useTailwind } from 'tailwind-rn';
-import twUtilities from '../tailwind.json';
 import { saveToDownloadsTestCase } from './cases/saveToDownloads';
 import { processSingleDevicePhoto } from './cases/processSingleDevicePhoto';
 import { initPhotosProcessor } from './cases/initPhotosProcessor';
 
-export function AppContent() {
-  const tailwind = useTailwind();
+export default function App() {
   const [activeAction, setActiveAction] = useState(-1);
   const [output, setOutput] = useState<any>(null);
   const [error, setError] = useState<any>(null);
+
   useEffect(() => {
     initSdk({
       DRIVE_API_URL: 'EMPTY',
@@ -37,7 +33,7 @@ export function AppContent() {
   const actions = [
     {
       name: 'Save to downloads',
-      description: 'Opens a document picker, pick a file and ',
+      description: 'Opens a document picker, pick a file and save it',
       run: saveToDownloadsTestCase,
     },
     {
@@ -52,68 +48,54 @@ export function AppContent() {
       run: initPhotosProcessor,
     },
   ];
+
   return (
-    <View style={tailwind('w-full')}>
-      {actions.map((action, index) => {
-        return (
-          <View style={tailwind('px-4 mt-4')} key={index}>
-            <PlaygroundCase
-              name={action.name}
-              description={action.description}
-              actionLabel={'Run Case'}
-              onPress={async () => {
-                setOutput(null);
-                setActiveAction(index);
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Mobile SDK Example</Text>
+      {actions.map((action, index) => (
+        <View style={styles.caseContainer} key={index}>
+          <PlaygroundCase
+            name={action.name}
+            description={action.description}
+            actionLabel="Run Case"
+            onPress={async () => {
+              setOutput(null);
+              setError(null);
+              setActiveAction(index);
+              try {
                 const result = await action.run();
                 setOutput(result);
-              }}
-              output={activeAction === index && output}
-            />
-          </View>
-        );
-      })}
-      {/* <Button
-        title="Save to downloads"
-        onPress={}
-      /> */}
-      {/* <Button
-        title="Encrypt a file"
-        onPress={async () => {
-          try {
-            const pickerResult = await DocumentPicker.pickSingle({
-              presentationStyle: 'fullScreen',
-              copyTo: 'cachesDirectory',
-            });
-
-            await handleEncryptFile(pickerResult);
-          } catch (e) {
-            handleError(e);
-          }
-        }}
-      /> */}
-      {/* <Button
-        title="Sync Photo"
-        onPress={async () => {
-          try {
-            const pickerResult = await DocumentPicker.pickSingle({
-              presentationStyle: 'fullScreen',
-              copyTo: 'cachesDirectory',
-            });
-            await handleProcessPhoto(pickerResult);
-          } catch (e) {
-            handleError(e);
-          }
-        }}
-      /> */}
-      {error ? <Text>{JSON.stringify(error, null, 2)}</Text> : null}
-    </View>
+              } catch (e) {
+                setError(e);
+              }
+            }}
+            output={activeAction === index ? output : null}
+          />
+        </View>
+      ))}
+      {error ? (
+        <Text style={styles.error}>{JSON.stringify(error, null, 2)}</Text>
+      ) : null}
+    </ScrollView>
   );
 }
 
-export default function App() {
-  return (
-    <TailwindProvider utilities={twUtilities}>
-      <AppContent />
-    </TailwindProvider>
-  );
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingTop: 60,
+    paddingHorizontal: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  caseContainer: {
+    marginTop: 16,
+  },
+  error: {
+    color: 'red',
+    marginTop: 16,
+  },
+});
