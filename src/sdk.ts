@@ -13,25 +13,25 @@ const LINKING_ERROR =
 export const getInternxtMobileSDK = (): NativeInternxtMobileSDK => {
   return NativeModules.MobileSdk
     ? NativeModules.MobileSdk
-    : new Proxy(
+    : (new Proxy(
         {},
         {
           get() {
             throw new Error(LINKING_ERROR);
           },
         }
-      );
+      ) as NativeInternxtMobileSDK);
 };
 
 export const getInternxtPhotosMobileSDK = (): NativeInternxtPhotosMobileSDK => {
   return NativeModules.PhotosMobileSdk
     ? NativeModules.PhotosMobileSdk
-    : new Proxy(
+    : (new Proxy(
         {},
         {
           get() {
             throw new Error(LINKING_ERROR);
           },
         }
-      );
+      ) as NativeInternxtPhotosMobileSDK);
 };
