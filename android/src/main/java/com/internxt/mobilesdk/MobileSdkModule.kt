@@ -337,7 +337,7 @@ class MobileSdkModule(private val reactContext: ReactApplicationContext) :
   }
 }
 
-class CustomLifecycleOwner(val activity: AppCompatActivity) : LifecycleOwner {
-
-  override fun getLifecycle(): Lifecycle = activity.lifecycle
+class CustomLifecycleOwner(private val activity: AppCompatActivity) : LifecycleOwner {
+  override val lifecycle: Lifecycle
+    get() = activity.lifecycle
 }
