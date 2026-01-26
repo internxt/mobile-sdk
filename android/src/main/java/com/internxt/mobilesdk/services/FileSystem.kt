@@ -146,6 +146,52 @@ object FS {
   }
 
   /**
+   * Generates a unique filename for MediaStore (Android 10+) by querying existing files
+   * in the Downloads directory and appending (1), (2), ... before the extension if needed.
+   */
+  fun getUniqueFilenameForMediaStore(contentResolver: ContentResolver, filename: String): String {
+    var uniqueFilename = filename
+    var counter = 0
+    val nameWithoutExtension = filename.substringBeforeLast('.', filename)
+    val extension = filename.substringAfterLast('.', "")
+
+    while (fileExistsInDownloads(contentResolver, uniqueFilename)) {
+      counter++
+      uniqueFilename =
+              if (extension.isNotEmpty()) {
+                "$nameWithoutExtension ($counter).$extension"
+              } else {
+                "$nameWithoutExtension ($counter)"
+              }
+    }
+    return uniqueFilename
+  }
+
+  /**
+   * Checks if a file with the given name exists in the Downloads directory via MediaStore.
+   */
+  private fun fileExistsInDownloads(contentResolver: ContentResolver, filename: String): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+      return false
+    }
+
+    val projection = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME)
+    val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
+    val selectionArgs = arrayOf(filename)
+
+    contentResolver.query(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            null
+    )?.use { cursor ->
+      return cursor.count > 0
+    }
+    return false
+  }
+
+  /**
    * Saves a file to the device's Downloads directory.
    * - On Android 10+ (Q+): Uses Scoped Storage with ContentResolver
    * - On Android 9 and below: Uses direct file access with unique filename to prevent overwrites
@@ -167,7 +213,11 @@ object FS {
       val mimeType = getMimeType(context.contentResolver, originalFilePath)
               ?: "application/octet-stream" // Fallback for empty or unknown files
 
-      contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, filename.removePrefix(File.separator))
+      // Generate unique filename to avoid MediaStore's default behavior of appending suffix after extension
+      val cleanFilename = filename.removePrefix(File.separator)
+      val uniqueFilename = getUniqueFilenameForMediaStore(context.contentResolver, cleanFilename)
+
+      contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, uniqueFilename)
       contentValues.put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
       contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
 
