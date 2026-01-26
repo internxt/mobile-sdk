@@ -12,177 +12,216 @@ import com.internxt.mobilesdk.utils.FileAccessRejectionException
 import com.internxt.mobilesdk.utils.Logger
 import java.io.*
 
-
 // This class is called FS to avoid naming conflicts with Java FileSystem class
 object FS {
 
-  /**
-   * Check if a file exists at a given path
-   */
+  /** Check if a file exists at a given path */
   fun fileExists(path: String): Boolean {
     return File(path).exists()
   }
 
-
   /**
-   * Unlink a file only if it exists
+   * Delete a file only if it exists
    *
-   * Return true if the file is successfully deleted, false otherwise
+   * @return true if the file was successfully deleted, false otherwise
    */
   fun unlinkIfExists(path: String): Boolean {
     val file = File(path)
-    val exists = this.fileExists(path)
+    if (!file.exists()) return false
 
-    try {
-      if(exists) {
-        return file.delete()
-      }
-
-    } catch (exception: IOException) {
-      exception.printStackTrace()
+    return try {
+      file.delete()
+    } catch (e: IOException) {
+      e.printStackTrace()
+      false
     }
-
-    return false
   }
 
+  /**
+   * Converts a file path to a proper Uri. If no scheme is present, assumes it's a local file path.
+   */
   @Throws(FileAccessRejectionException::class)
-  public fun getFileUri(filepath: String, isDirectoryAllowed: Boolean): Uri {
-    var uri: Uri = Uri.parse(filepath)
-    if (uri.getScheme() == null) {
-      // No prefix, assuming that provided path is absolute path to file
+  fun getFileUri(filepath: String, isDirectoryAllowed: Boolean): Uri {
+    var uri = Uri.parse(filepath)
+    if (uri.scheme == null) {
       val file = File(filepath)
       if (!isDirectoryAllowed && file.isDirectory) {
-        throw FileAccessRejectionException(
-          "You don't have access to $filepath"
-        )
+        throw FileAccessRejectionException("You don't have access to $filepath")
       }
       uri = Uri.parse("file://$filepath")
     }
     return uri
   }
 
-  fun createFile(path: String) : Boolean{
+  /** Create a new empty file at the given path */
+  fun createFile(path: String): Boolean {
     return File(path).createNewFile()
   }
 
+  /** Extracts the filename (without extension) from a full path */
   fun getFilenameFromPath(path: String): String {
-    val name = path.substring(path.lastIndexOf(File.separator));
+    val name = path.substring(path.lastIndexOf(File.separator))
     val index = name.lastIndexOf(".")
     return name.substring(1, index)
   }
 
+  /** Extracts the file extension from a full path */
   fun getFileTypeFromPath(path: String): String {
-    val filename = path.substring(path.lastIndexOf(File.separator));
+    val filename = path.substring(path.lastIndexOf(File.separator))
     val index = filename.lastIndexOf(".")
-    if(index == -1 ) throw Exception("This file does not have an extension")
-    return filename.substring(index+1)
+    if (index == -1) throw Exception("This file does not have an extension")
+    return filename.substring(index + 1)
   }
 
+  /** Copies all relevant EXIF tags from one image stream to another */
   @Throws(IOException::class)
   fun copyExif(oldFileStream: InputStream, newFileStream: InputStream) {
     val oldExif = ExifInterface(oldFileStream)
-    val attributes = arrayOf(
-      ExifInterface.TAG_F_NUMBER,
-      ExifInterface.TAG_DATETIME,
-      ExifInterface.TAG_DATETIME_DIGITIZED,
-      ExifInterface.TAG_EXPOSURE_TIME,
-      ExifInterface.TAG_FLASH,
-      ExifInterface.TAG_FOCAL_LENGTH,
-      ExifInterface.TAG_GPS_ALTITUDE,
-      ExifInterface.TAG_GPS_ALTITUDE_REF,
-      ExifInterface.TAG_GPS_DATESTAMP,
-      ExifInterface.TAG_GPS_LATITUDE,
-      ExifInterface.TAG_GPS_LATITUDE_REF,
-      ExifInterface.TAG_GPS_LONGITUDE,
-      ExifInterface.TAG_GPS_LONGITUDE_REF,
-      ExifInterface.TAG_GPS_PROCESSING_METHOD,
-      ExifInterface.TAG_GPS_TIMESTAMP,
-      ExifInterface.TAG_IMAGE_LENGTH,
-      ExifInterface.TAG_IMAGE_WIDTH,
-      ExifInterface.TAG_ISO_SPEED_RATINGS,
-      ExifInterface.TAG_MAKE,
-      ExifInterface.TAG_MODEL,
-      ExifInterface.TAG_ORIENTATION,
-      ExifInterface.TAG_SUBSEC_TIME,
-      ExifInterface.TAG_SUBSEC_TIME_DIGITIZED,
-      ExifInterface.TAG_SUBSEC_TIME_ORIGINAL,
-      ExifInterface.TAG_WHITE_BALANCE
-    )
     val newExif = ExifInterface(newFileStream)
-    for (i in attributes.indices) {
-      val value = oldExif.getAttribute(attributes[i])
-      if (value != null) newExif.setAttribute(attributes[i], value)
+
+    val attributes =
+            arrayOf(
+                    ExifInterface.TAG_F_NUMBER,
+                    ExifInterface.TAG_DATETIME,
+                    ExifInterface.TAG_DATETIME_DIGITIZED,
+                    ExifInterface.TAG_EXPOSURE_TIME,
+                    ExifInterface.TAG_FLASH,
+                    ExifInterface.TAG_FOCAL_LENGTH,
+                    ExifInterface.TAG_GPS_ALTITUDE,
+                    ExifInterface.TAG_GPS_ALTITUDE_REF,
+                    ExifInterface.TAG_GPS_DATESTAMP,
+                    ExifInterface.TAG_GPS_LATITUDE,
+                    ExifInterface.TAG_GPS_LATITUDE_REF,
+                    ExifInterface.TAG_GPS_LONGITUDE,
+                    ExifInterface.TAG_GPS_LONGITUDE_REF,
+                    ExifInterface.TAG_GPS_PROCESSING_METHOD,
+                    ExifInterface.TAG_GPS_TIMESTAMP,
+                    ExifInterface.TAG_IMAGE_LENGTH,
+                    ExifInterface.TAG_IMAGE_WIDTH,
+                    ExifInterface.TAG_ISO_SPEED_RATINGS,
+                    ExifInterface.TAG_MAKE,
+                    ExifInterface.TAG_MODEL,
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.TAG_SUBSEC_TIME,
+                    ExifInterface.TAG_SUBSEC_TIME_DIGITIZED,
+                    ExifInterface.TAG_SUBSEC_TIME_ORIGINAL,
+                    ExifInterface.TAG_WHITE_BALANCE
+            )
+
+    for (attr in attributes) {
+      val value = oldExif.getAttribute(attr)
+      if (value != null) newExif.setAttribute(attr, value)
     }
     newExif.saveAttributes()
   }
+
+  /** Checks if a file is empty (has no content) */
   fun fileIsEmpty(path: String): Boolean {
     val file = File(path)
-    try {
-      val br = BufferedReader(FileReader(file))
-      if (br.readLine() == null) {
-        return true
-      }
-
-      return false
+    return try {
+      BufferedReader(FileReader(file)).use { it.readLine() == null }
     } catch (e: IOException) {
       e.printStackTrace()
-      return true
+      true
     }
   }
 
+  /** Generates a unique filename by appending (1), (2), ... if the file already exists */
+  fun getUniqueFilename(directory: File, filename: String): String {
+    var uniqueFilename = filename
+    var counter = 0
+    val nameWithoutExtension = filename.substringBeforeLast('.', filename)
+    val extension = filename.substringAfterLast('.', "")
 
-  @Throws(NoSuchFileException::class, FileAlreadyExistsException::class, IOException::class)
-  fun saveFileToDownloadsDirectory(context: ReactApplicationContext, originalFilePath: String) {
-    val filename =  originalFilePath.substring(originalFilePath.lastIndexOf(File.separator));
-    val fileInputStream: InputStream =
-      context.contentResolver.openInputStream(getFileUri(originalFilePath, true))
-        ?: throw Exception("Cannot open Input stream at path $originalFilePath")
-
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
-      val contentValues = ContentValues();
-
-      contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
-      val mimeType = getMimeType(context.contentResolver, originalFilePath)
-      Logger.info("Mime type")
-      if (mimeType != null) {
-        Logger.info(mimeType)
-      } else {
-        Logger.info("No mime")
-      }
-      contentValues.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
-      contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-      context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-          ?: throw Exception("FileUri not inserted in content resolver");
-
-      Logger.info("File inserted in content database")
+    while (File(directory, uniqueFilename).exists()) {
+      counter++
+      uniqueFilename =
+              if (extension.isNotEmpty()) {
+                "$nameWithoutExtension ($counter).$extension"
+              } else {
+                "$nameWithoutExtension ($counter)"
+              }
     }
+    return uniqueFilename
+  }
+
+  /**
+   * Saves a file to the device's Downloads directory.
+   * - On Android 10+ (Q+): Uses Scoped Storage with ContentResolver
+   * - On Android 9 and below: Uses direct file access with unique filename to prevent overwrites
+   */
+  @Throws(Exception::class)
+  fun saveFileToDownloadsDirectory(context: ReactApplicationContext, originalFilePath: String) {
+    // Extract clean filename without leading slash
+    val filename = originalFilePath.substring(originalFilePath.lastIndexOf(File.separator) + 1)
+
+    val fileInputStream =
+            context.contentResolver.openInputStream(getFileUri(originalFilePath, true))
+                    ?: throw Exception("Cannot open input stream at path $originalFilePath")
 
     val buffer = ByteArray(8 * 1024) // 8KB buffer
     var bytesRead: Int
 
-    val downloadsDir =
-      Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).toString()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      val contentValues = ContentValues()
+      val mimeType = getMimeType(context.contentResolver, originalFilePath)
+              ?: "application/octet-stream" // Fallback for empty or unknown files
 
-    val destination = File(downloadsDir, filename)
-    val outputStream = FileOutputStream(destination)
+      contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, filename.removePrefix(File.separator))
+      contentValues.put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+      contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
 
-    try {
-      while (fileInputStream.read(buffer).also { bytesRead = it } != -1) {
-        outputStream.write(buffer, 0, bytesRead)
+      Logger.info("Mime type: ${mimeType ?: "No mime"}")
+
+      val fileUri =
+              context.contentResolver.insert(
+                      MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                      contentValues
+              )
+                      ?: throw Exception("FileUri not inserted in content resolver")
+
+      Logger.info("File inserted in content database with uri: $fileUri")
+
+      val outputStream =
+              context.contentResolver.openOutputStream(fileUri)
+                      ?: throw Exception("Cannot open output stream for uri: $fileUri")
+
+      try {
+        while (fileInputStream.read(buffer).also { bytesRead = it } != -1) {
+          outputStream.write(buffer, 0, bytesRead)
+        }
+      } catch (e: IOException) {
+        e.printStackTrace()
+        throw e
+      } finally {
+        fileInputStream.close()
+        outputStream.close()
       }
-    } catch (e: IOException) {
-      e.printStackTrace()
-    } finally {
-      fileInputStream.close()
-      outputStream.close()
+    } else {
+      val downloadsDir =
+              Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+      val resolvedFilename = getUniqueFilename(downloadsDir, filename.removePrefix(File.separator))
+
+      val destination = File(downloadsDir, resolvedFilename)
+      val outputStream = FileOutputStream(destination)
+
+      try {
+        while (fileInputStream.read(buffer).also { bytesRead = it } != -1) {
+          outputStream.write(buffer, 0, bytesRead)
+        }
+      } catch (e: IOException) {
+        e.printStackTrace()
+        throw e
+      } finally {
+        fileInputStream.close()
+        outputStream.close()
+      }
     }
 
     Logger.info("Closed stream")
-
   }
 
+  /** Gets the MIME type of a file from its Uri */
   fun getMimeType(contentResolver: ContentResolver, uri: String): String? {
     return contentResolver.getType(getFileUri(uri, true))
   }
